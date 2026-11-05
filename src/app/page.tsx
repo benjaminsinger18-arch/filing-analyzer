@@ -1,5 +1,5 @@
-import { GtmDashboard } from '@/components/gtm/gtm-dashboard'
+import { Analyzer } from '@/components/analyzer/analyzer'
 
 export default function Home() {
-  return <GtmDashboard />
+  return <Analyzer />
 }

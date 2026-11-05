@@ -1,29 +1,44 @@
-# GTM Benchmark Dashboard
+# Filing Analyzer
 
-A portfolio project that compares a **hypothetical** $20M ARR seat-based B2B SaaS company with 2026 go-to-market benchmarks. Built with Next.js, shadcn/ui, Tailwind and Recharts, styled after the bionis-dashboard registry block.
+Drop in an SEC 10-K or 10-Q and get financial ratios, quality scores, rule-based observations and a transparent screening rating. Every number traces back to the XBRL tag it came from.
 
-> All company figures are illustrative assumptions, not real data.
+> **Not investment advice.** The rating is a rules-based screen of one filing. It is not a recommendation to buy, sell or hold anything and ignores price, industry context and management.
 
-## What it shows
+## How it works
 
-- **Dashboard:** key-metric cards, company vs. benchmark chart (company as % of benchmark, with the ±10% tolerance band), ranked largest deviations, comparison table (gap, gap %, index, flag), first test per gap, and the limits of the benchmarks.
-- **Benchmarks:** every benchmark value with source, sample size, verification status and link. Missing values are marked `no source`, never estimated.
-- **Company Assumptions:** every company value, labeled as an assumption.
+1. **Input:** upload an EDGAR inline-XBRL `.htm` filing (parsed in the browser; the file never leaves your machine), or look up a ticker (the server fetches the latest 10-K/10-Q list from SEC EDGAR).
+2. **Parse and normalize:** `src/lib/ixbrl/parse.ts` reads the tagged facts; `normalize.ts` maps them to canonical line items using ordered us-gaap tag fallbacks, keeps only consolidated (non-dimensional) values, and picks current and prior-year periods (a 10-Q uses the quarter for income ratios and year-to-date for cash flow).
+3. **Modules:** each analysis is a self-contained `AnalysisModule` in `src/modules/`. Adding one is a new file plus one line in `registry.ts`.
 
-Flag logic: index = company / benchmark; `Above` or `Below` when the index is outside 0.90 to 1.10, otherwise `At`. A separate Favorable / Unfavorable read accounts for metrics where lower is better (sales cycle). All calculations are in `src/components/gtm/data.ts`.
+| Module | What it computes |
+| --- | --- |
+| Profitability | gross / operating / net margin, ROA, ROE, equity multiplier |
+| Liquidity | current, quick, cash ratio, working capital |
+| Leverage & solvency | debt/equity, net debt, interest coverage, liabilities/assets, debt/EBITDA |
+| Efficiency | asset turnover, DSO, DIO, DPO, cash conversion cycle |
+| Growth | YoY revenue, operating income, net income, EPS |
+| Cash-flow quality | OCF/net income, free cash flow, FCF margin, accruals ratio |
+| Quality & distress | Piotroski F-score, Altman Z''-score |
+| Valuation (optional) | P/E, P/B, market cap, EV/EBITDA, FCF yield; needs a share price you type in |
+| Screening rating | weighted composite using the published rubric in `src/modules/rating.ts` |
+| Observations | templated flags such as operating loss, thin coverage, weak cash conversion |
 
-## Sources and verification
-
-- ICONIQ State of Go-to-Market 2026 (January 2026 survey, 150+ B2B GTM executives): values taken from a secondary summary (SaaStr), so every one is marked **Unverified** until checked against the gated original.
-- SaaS Capital benchmarks (NRR, growth): third source, bootstrapped/private population; marked for re-confirmation.
-- Level Equity 2026 GTM Insights: no quantified values for the requested metrics were found in the page text.
-- Win rate and NRR/NDR as an AE comp metric: no source.
+Missing inputs produce `n/a` with a reason, never zero or NaN.
 
 ## Run locally
 
 ```bash
 npm install
+cp .env.example .env.local   # then set SEC_USER_AGENT to "Your Name your-email@example.com"
 npm run dev
+npm test
 ```
 
-Open http://localhost:3000.
+`SEC_USER_AGENT` is only needed for ticker lookup; SEC requires a contact in the User-Agent header. Uploads work without it.
+
+## Limits
+
+- US GAAP inline-XBRL filings only (roughly 2019 onward). PDFs and older filings are not supported.
+- Banks, insurers and other filers without a classified balance sheet will show `n/a` for several ratios; Altman Z'' is unreliable for them.
+- Total debt sums the debt tags a company reports; check the trace for what was included.
+- A single filing cannot show trends beyond one comparison period.
