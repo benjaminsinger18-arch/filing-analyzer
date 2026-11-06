@@ -35,7 +35,7 @@ export function piotroski(fin: Financials): { score: number | null; tests: Test[
 export const scores: AnalysisModule = {
   id: 'scores',
   title: 'Quality & distress scores',
-  description: "Piotroski F-score (financial strength) and Altman Z''-score (distress risk, non-manufacturer variant).",
+  description: "Piotroski F-score, Altman Z''.",
   requires: ['netIncome', 'ocf', 'assets', 'currentAssets', 'currentLiabilities', 'retainedEarnings', 'operatingIncome', 'liabilities', 'equity'],
   run(fin) {
     const notes: Note[] = []
@@ -64,7 +64,7 @@ export const scores: AnalysisModule = {
           1.05 * (v["Stockholders' equity"] / tl)
         )
       },
-      "Zones: above 2.6 'safe', 1.1 to 2.6 'grey', below 1.1 'distress'. Designed for non-manufacturers; unreliable for banks and insurers.",
+      "Above 2.6 safe, 1.1-2.6 grey, below 1.1 distress. Unreliable for banks and insurers.",
     )
     if (altman.value !== null) {
       const z = altman.value
@@ -78,7 +78,7 @@ export const scores: AnalysisModule = {
     if (fin.basis === 'quarter') {
       piotroskiMetric = {
         id: 'piotroski', label: 'Piotroski F-score', value: null, unit: 'score',
-        formula: 'Count of 9 binary tests', inputs: [], reason: 'Annual filings only (needs full-year comparatives)',
+        formula: 'Count of 9 binary tests', inputs: [], reason: 'Annual filings only',
       }
     } else {
       const p = piotroski(fin)
@@ -86,8 +86,8 @@ export const scores: AnalysisModule = {
         id: 'piotroski', label: 'Piotroski F-score', value: p.score, unit: 'score',
         formula: 'Count of 9 binary tests (profitability, leverage/liquidity, efficiency)',
         inputs: p.tests.map((t) => ({ label: t.name, value: t.pass === null ? NaN : t.pass ? 1 : 0, tag: t.pass === null ? 'not testable' : t.pass ? 'pass' : 'fail' })),
-        reason: p.score === null ? 'Fewer than 6 of 9 tests could be evaluated from this filing' : undefined,
-        hint: '8-9 strong, 4-7 middling, 0-3 weak (Piotroski, 2000).',
+        reason: p.score === null ? 'Fewer than 6 of 9 tests testable' : undefined,
+        hint: '8-9 strong, 4-7 middling, 0-3 weak.',
       }
       if (p.score !== null) {
         const failed = p.tests.filter((t) => t.pass === false).map((t) => t.name.toLowerCase())

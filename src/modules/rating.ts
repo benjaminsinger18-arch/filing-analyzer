@@ -76,7 +76,7 @@ export function computeRating(results: Record<string, ModuleResult>): RatingResu
 export const rating: AnalysisModule = {
   id: 'rating',
   title: 'Screening rating',
-  description: 'Composite of the other modules using a published rubric. A screen, not advice.',
+  description: 'Composite of the other modules. A screen, not advice.',
   requires: [],
   run(_fin, prior) {
     const r = computeRating(prior)

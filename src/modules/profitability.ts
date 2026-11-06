@@ -4,7 +4,7 @@ import type { AnalysisModule } from './types'
 export const profitability: AnalysisModule = {
   id: 'profitability',
   title: 'Profitability',
-  description: 'Margins and returns on assets and equity.',
+  description: 'Margins, ROA, ROE.',
   requires: ['revenue', 'grossProfit', 'operatingIncome', 'netIncome', 'assets', 'equity'],
   run(fin) {
     const f = fin.annualFactor

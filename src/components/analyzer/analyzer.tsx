@@ -215,8 +215,8 @@ function RubricTable() {
   return (
     <div className="flex flex-col gap-3 p-3 text-xs">
       <p className="text-(--muted)">
-        Each metric maps to 0-100 through these tiers. A category is the mean of its available metric scores; the composite is the mean of available categories.
-        Strong is 75+, Solid 60+, Mixed 45+, Weak below. Altman Z&apos;&apos; scores 100 above 2.6, 55 from 1.1 to 2.6, 10 below. Liabilities/assets scores 100 at or under 40%, 75 to 60%, 50 to 80%, else 25.
+        Metrics map to 0-100 through these tiers; categories average their metrics; the composite averages categories. 75+ Strong, 60+ Solid, 45+ Mixed, else Weak.
+        Altman Z&apos;&apos;: 100 above 2.6, 55 to 1.1, else 10. Liabilities/assets: 100 up to 40%, 75 to 60%, 50 to 80%, else 25.
       </p>
       <div className="overflow-x-auto">
         <table className="w-full min-w-120 text-left">
@@ -309,7 +309,11 @@ export function Analyzer() {
 
   const present = (f: Financials) => {
     setFin(f)
-    setHistory((h) => [f, ...h.filter((x) => !(x.meta.name === f.meta.name && x.meta.form === f.meta.form && x.meta.periodEnd === f.meta.periodEnd))].slice(0, 12))
+    setHistory((h) =>
+      [f, ...h.filter((x) => !(x.meta.name === f.meta.name && x.meta.form === f.meta.form && x.meta.periodEnd === f.meta.periodEnd))]
+        .sort((a, b) => b.meta.periodEnd.localeCompare(a.meta.periodEnd) || a.meta.name.localeCompare(b.meta.name))
+        .slice(0, 12),
+    )
   }
 
   async function handleFile(file: File) {
@@ -317,12 +321,12 @@ export function Analyzer() {
     setFilings(null)
     if (file.size > MAX_BYTES) return setError('That file is larger than 40 MB.')
     if (!/\.(htm|html|xhtml)$/i.test(file.name)) {
-      return setError('Please upload the EDGAR .htm filing (inline XBRL). PDFs and text files are not supported.')
+      return setError('Upload an EDGAR .htm filing (inline XBRL).')
     }
     setLoading(true)
     try {
       const parsed = parseIxbrl(await file.text())
-      if (!isIxbrl(parsed)) throw new NotIxbrlError('This file has no inline-XBRL data. Download the main .htm document of a 2019 or later 10-K / 10-Q from EDGAR.')
+      if (!isIxbrl(parsed)) throw new NotIxbrlError('No inline-XBRL data found. Use the main .htm of a 2019+ filing.')
       present(normalize(parsed))
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not read that filing.')
@@ -340,7 +344,7 @@ export function Analyzer() {
       const res = await fetch(`/api/edgar?ticker=${encodeURIComponent(ticker.trim())}&form=${formType}`)
       const body = await res.json()
       if (!res.ok) throw new Error(body.error ?? 'Lookup failed.')
-      setFilings(body.filings)
+      setFilings([...(body.filings as FilingRef[])].sort((a, b) => b.reportDate.localeCompare(a.reportDate)))
       if (!body.filings.length) setError(`No ${formType} filings found for ${ticker.toUpperCase()}.`)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Lookup failed.')
@@ -386,7 +390,7 @@ export function Analyzer() {
             </span>
             <span className="text-base font-bold tracking-wide">FILINGS</span>
           </div>
-          <span className="hidden text-xs text-(--muted) sm:inline">Analyzer · 10-K / 10-Q screening terminal</span>
+          <span className="hidden text-xs text-(--muted) sm:inline">10-K / 10-Q analyzer</span>
         </div>
         <div className="flex items-center gap-2">
           <details className="relative">
@@ -412,7 +416,7 @@ export function Analyzer() {
       </nav>
 
       <div className="shrink-0 border-b border-(--line) bg-(--panel-2) px-3 py-1 text-[11px] text-(--muted)">
-        Rules-based screen of a single filing. Not personalized investment advice and not a recommendation to buy, sell or hold any security. Uploaded files are parsed in your browser.
+        Rules-based screen of one filing. Not investment advice.
       </div>
 
       <main className="grid min-h-0 flex-1 grid-cols-1 gap-2 overflow-y-auto p-2 lg:grid-cols-[280px_minmax(0,1fr)_340px] lg:overflow-hidden">
@@ -421,7 +425,7 @@ export function Analyzer() {
           <Panel title="Analyzed" className="shrink-0">
             <div className="max-h-72 overflow-y-auto">
               {history.length === 0 ? (
-                <p className="px-3 py-4 text-xs text-(--muted)">Filings you load appear here with their screening score.</p>
+                <p className="px-3 py-4 text-xs text-(--muted)">No filings yet.</p>
               ) : (
                 <table className="w-full text-left">
                   <thead>
@@ -451,7 +455,7 @@ export function Analyzer() {
           </Panel>
           <Panel title="Observations" className="min-h-40 flex-1">
             <ul className="min-h-0 overflow-y-auto">
-              {results ? results.notes.notes.map((n, i) => <NoteRow key={i} n={n} />) : <li className="px-3 py-4 text-xs text-(--muted)">Load a filing to see rule-triggered observations.</li>}
+              {results ? results.notes.notes.map((n, i) => <NoteRow key={i} n={n} />) : <li className="px-3 py-4 text-xs text-(--muted)">Load a filing.</li>}
             </ul>
           </Panel>
         </div>
@@ -479,13 +483,13 @@ export function Analyzer() {
                     <Tab key={t} active={chartTab === t} onClick={() => setChartTab(t)}>{CHART_ITEMS[t].label}</Tab>
                   ))}
                   <span className="ml-auto text-[11px] text-(--muted)">
-                    {fin.basis === 'quarter' ? 'Quarter vs. same quarter last year; cash flow is year-to-date' : 'Fiscal year vs. prior fiscal year'} · bar color: up/down vs. prior
+                    {fin.basis === 'quarter' ? 'Quarter vs. prior-year quarter · cash flow YTD' : 'FY vs. prior FY'}
                   </span>
                 </div>
                 <FundamentalsChart fin={fin} tab={chartTab} />
               </>
             ) : (
-              <p className="px-4 py-16 text-center text-sm text-(--muted)">Look up a ticker or upload an EDGAR inline-XBRL filing below.</p>
+              <p className="px-4 py-16 text-center text-sm text-(--muted)">Load a filing below.</p>
             )}
           </Panel>
 
@@ -516,7 +520,7 @@ export function Analyzer() {
                   </ul>
                 ) : null}
                 <label className="flex items-center gap-2 text-[11px] text-(--muted)">
-                  Share price (optional, enables valuation)
+                  Share price (optional)
                   <input value={price} onChange={(e) => setPrice(e.target.value)} inputMode="decimal" placeholder="185.50" className="num h-7 w-24 px-2 text-xs" />
                 </label>
               </div>
@@ -528,7 +532,7 @@ export function Analyzer() {
               >
                 <Upload className="size-4 text-(--muted)" />
                 <p className="text-xs font-semibold">Drop a 10-K / 10-Q .htm file</p>
-                <p className="text-[11px] text-(--muted)">Main EDGAR document, 2019 or later</p>
+                <p className="text-[11px] text-(--muted)">EDGAR .htm, 2019+</p>
                 <input ref={fileRef} type="file" accept=".htm,.html,.xhtml" className="hidden" onChange={(e) => e.target.files?.[0] && void handleFile(e.target.files[0])} />
                 <button type="button" onClick={() => fileRef.current?.click()} className="rounded border border-(--line) px-3 py-1 text-xs hover:bg-(--panel-2)">Choose file</button>
               </div>
@@ -555,7 +559,7 @@ export function Analyzer() {
                 <dl className="grid grid-cols-[140px_1fr] gap-x-3 gap-y-1.5 p-3 text-xs">
                   {[
                     ['Company', fin.meta.name], ['Ticker', fin.meta.ticker ?? '-'], ['CIK', fin.meta.cik ?? '-'], ['Form', `${fin.meta.form} ${fin.meta.fiscalPeriod}`],
-                    ['Period end', fin.meta.periodEnd], ['Basis', fin.basis === 'annual' ? 'Annual' : 'Quarter (income ratios annualized x4; cash flow year-to-date)'],
+                    ['Period end', fin.meta.periodEnd], ['Basis', fin.basis === 'annual' ? 'Annual' : 'Quarter (ratios annualized x4; cash flow YTD)'],
                     ['Balance-sheet comparison', fin.bsPrior.assets ? 'prior fiscal year-end' : 'not found'],
                   ].map(([k, v]) => (
                     <Fragment key={k}>
@@ -570,7 +574,7 @@ export function Analyzer() {
             ) : results ? (
               <RatioTable metrics={allMetrics} />
             ) : (
-              <p className="p-4 text-xs text-(--muted)">Ratios appear here once a filing is loaded. Click a row to see its inputs and XBRL tags.</p>
+              <p className="p-4 text-xs text-(--muted)">Load a filing. Click a row for inputs and XBRL tags.</p>
             )}
           </Panel>
         </div>
@@ -583,7 +587,7 @@ export function Analyzer() {
                 <div className="flex items-end justify-between">
                   <div>
                     <p className={cn('num text-4xl leading-none font-bold', scoreTone(rating.composite))}>{rating.composite === null ? '-' : Math.round(rating.composite)}</p>
-                    <p className="mt-1 text-[11px] text-(--muted)">composite of {rating.used} of {rating.total} categories</p>
+                    <p className="mt-1 text-[11px] text-(--muted)">{rating.used}/{rating.total} categories</p>
                   </div>
                   <Chip className={cn('text-sm', tierTone[rating.tier])}>{rating.tier}</Chip>
                 </div>
@@ -598,11 +602,11 @@ export function Analyzer() {
                 </div>
               </div>
             ) : (
-              <p className="px-3 py-6 text-center text-xs text-(--muted)">No rating yet.</p>
+              <p className="px-3 py-6 text-center text-xs text-(--muted)">No rating.</p>
             )}
           </Panel>
 
-          <Panel title="Ratio book" className="min-h-60 flex-1" right={<span className="text-[11px] text-(--muted)">metric · value · score</span>}>
+          <Panel title="Ratio book" className="min-h-60 flex-1" right={<span className="text-[11px] text-(--muted)">value · score</span>}>
             <div className="min-h-0 overflow-y-auto">
               {book.length ? (
                 <table className="w-full text-left">
@@ -623,7 +627,7 @@ export function Analyzer() {
                   </tbody>
                 </table>
               ) : (
-                <p className="px-3 py-6 text-center text-xs text-(--muted)">Metrics appear here once a filing is loaded.</p>
+                <p className="px-3 py-6 text-center text-xs text-(--muted)">No data.</p>
               )}
             </div>
           </Panel>
