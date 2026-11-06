@@ -18,7 +18,7 @@ export function metric(
     .map(([k]) => k)
   const base = { id, label, unit, formula, hint }
   if (missing.length) {
-    return { ...base, value: null, inputs: [], reason: `Not reported in this filing: ${missing.join(', ')}` }
+    return { ...base, value: null, inputs: [], reason: `Not reported: ${missing.join(', ')}` }
   }
   const nums: Record<string, number> = {}
   const list = Object.entries(inputs).map(([k, v]) => {
@@ -27,7 +27,7 @@ export function metric(
   })
   const value = fn(nums)
   if (value === null || !Number.isFinite(value)) {
-    return { ...base, value: null, inputs: list, reason: 'Not meaningful (zero or negative denominator)' }
+    return { ...base, value: null, inputs: list, reason: 'Not meaningful' }
   }
   return { ...base, value, inputs: list }
 }

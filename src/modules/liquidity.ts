@@ -4,7 +4,7 @@ import type { AnalysisModule } from './types'
 export const liquidity: AnalysisModule = {
   id: 'liquidity',
   title: 'Liquidity',
-  description: 'Ability to meet short-term obligations.',
+  description: 'Current, quick, cash ratios.',
   requires: ['currentAssets', 'currentLiabilities', 'cash', 'inventory'],
   run(fin) {
     const b = fin.bsCur

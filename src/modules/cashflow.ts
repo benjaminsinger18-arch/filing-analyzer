@@ -4,7 +4,7 @@ import type { AnalysisModule } from './types'
 export const cashflow: AnalysisModule = {
   id: 'cashflow',
   title: 'Cash-flow quality',
-  description: 'Whether earnings are backed by cash. Uses year-to-date figures for a 10-Q.',
+  description: 'OCF, FCF, accruals.',
   requires: ['ocf', 'capex', 'netIncome', 'revenue', 'assets'],
   run(fin) {
     const y = fin.ytd
@@ -25,7 +25,7 @@ export const cashflow: AnalysisModule = {
         metric('accruals', 'Accruals ratio', '%', `(Net income - OCF) / Total assets${ytdNote}`,
           { 'Net income': y.netIncome, 'Operating cash flow': y.ocf, 'Total assets': fin.bsCur.assets },
           (v) => div(v['Net income'] - v['Operating cash flow'], v['Total assets']),
-          'Persistently high positive values mean earnings rely on non-cash accruals.'),
+          'High positive values mean earnings rely on accruals.'),
       ],
     }
   },

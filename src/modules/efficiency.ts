@@ -4,7 +4,7 @@ import type { AnalysisModule } from './types'
 export const efficiency: AnalysisModule = {
   id: 'efficiency',
   title: 'Efficiency',
-  description: 'How productively assets and working capital are used.',
+  description: 'Turnover and working-capital days.',
   requires: ['revenue', 'cogs', 'assets', 'receivables', 'inventory', 'payables'],
   run(fin) {
     const f = fin.annualFactor

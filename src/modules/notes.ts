@@ -6,7 +6,7 @@ const pct = (v: number) => `${(v * 100).toFixed(1)}%`
 export const notes: AnalysisModule = {
   id: 'notes',
   title: 'Observations',
-  description: 'Rule-triggered flags drawn from the other modules.',
+  description: 'Rule-triggered flags.',
   requires: [],
   run(fin, prior) {
     const m = (id: string) =>
@@ -17,7 +17,7 @@ export const notes: AnalysisModule = {
     const add = (tone: Note['tone'], text: string) => out.push({ tone, text })
 
     if (!fin.bsCur.currentAssets && !fin.cur.grossProfit) {
-      add('info', 'This looks like a bank, insurer or other filer without a classified balance sheet or gross profit. Liquidity, margin and turnover ratios are n/a, reported debt may be incomplete, and the Altman and rating results should be read with caution.')
+      add('info', 'Bank/insurer-style filing: liquidity, margin and turnover ratios are n/a, debt may be incomplete; treat the rating with caution.')
     }
 
     const om = m('operating-margin')

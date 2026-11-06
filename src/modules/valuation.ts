@@ -5,7 +5,7 @@ import type { AnalysisModule } from './types'
 export const valuation: AnalysisModule = {
   id: 'valuation',
   title: 'Valuation',
-  description: 'Needs a share price you enter yourself; filings do not contain market prices.',
+  description: 'P/E, P/B, EV/EBITDA. Needs a share price.',
   requires: ['epsDiluted', 'equity', 'dilutedShares', 'debt', 'cash', 'operatingIncome', 'da'],
   run(fin) {
     if (!fin.price || fin.price <= 0) {
@@ -13,7 +13,7 @@ export const valuation: AnalysisModule = {
         id: 'valuation',
         title: 'Valuation',
         metrics: [],
-        notes: [{ tone: 'info', text: 'Enter a share price above to compute P/E, P/B, market cap and EV/EBITDA.' }],
+        notes: [{ tone: 'info', text: 'Enter a share price for valuation.' }],
       }
     }
     const price = { value: fin.price, tag: 'user input' }
@@ -36,7 +36,7 @@ export const valuation: AnalysisModule = {
       id: 'valuation',
       title: 'Valuation',
       notes: [
-        { tone: 'info', text: 'Valuation uses diluted weighted-average shares and the price you entered. Prices move daily; this is not a price target.' },
+        { tone: 'info', text: 'Uses diluted weighted shares and your price. Not a price target.' },
       ],
       metrics: [
         metric('pe', 'P/E', 'x', `Price / Diluted EPS${fin.basis === 'quarter' ? ' (quarter x4)' : ''}`,

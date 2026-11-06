@@ -6,7 +6,7 @@ import type { LineItem } from '@/lib/financials'
 export const growthModule: AnalysisModule = {
   id: 'growth',
   title: 'Growth',
-  description: 'Change versus the same period a year earlier.',
+  description: 'Year-over-year change.',
   requires: ['revenue', 'operatingIncome', 'netIncome', 'epsDiluted'],
   run(fin) {
     const vs = fin.basis === 'annual' ? 'prior fiscal year' : 'same quarter last year'
