@@ -25,6 +25,14 @@ function tierScore(id: string, value: number): number {
   return t.floor
 }
 
+/** 0-100 rubric score for one metric, or null when the metric is not part of the rubric. */
+export function scoreMetric(id: string, value: number | null): number | null {
+  if (value === null) return null
+  if (id === 'altman') return value > 2.6 ? 100 : value >= 1.1 ? 55 : 10
+  if (id === 'liabilities-assets' || RUBRIC_TABLES[id]) return tierScore(id, value)
+  return null
+}
+
 const CATEGORIES: { id: string; label: string; metrics: string[] }[] = [
   { id: 'profitability', label: 'Profitability', metrics: ['operating-margin', 'roa'] },
   { id: 'balance', label: 'Balance sheet', metrics: ['current-ratio', 'liabilities-assets', 'interest-coverage'] },

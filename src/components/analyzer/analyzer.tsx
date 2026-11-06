@@ -1,19 +1,24 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { AlertTriangle, CheckCircle2, FileText, Info, Search, Upload } from 'lucide-react'
-import './theme.css'
-import type { Financials } from '@/lib/financials'
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Moon, Search, SlidersHorizontal, Sun, Upload } from 'lucide-react'
+import './terminal.css'
+import { LINE_ITEM_LABELS, type Financials, type Items, type LineItem } from '@/lib/financials'
 import { normalize, NotIxbrlError } from '@/lib/ixbrl/normalize'
 import { isIxbrl, parseIxbrl } from '@/lib/ixbrl/parse'
-import { ALL_MODULES, RATIO_MODULES, runModules } from '@/modules/registry'
-import type { Metric, ModuleResult, Note, RatingResult } from '@/modules/types'
+import { RATIO_MODULES, runModules } from '@/modules/registry'
+import { RUBRIC_TABLES, scoreMetric } from '@/modules/rating'
+import type { Metric, Note, RatingResult } from '@/modules/types'
 import { cn } from '@/lib/utils'
 
 const MAX_BYTES = 40 * 1024 * 1024
 const STORAGE_KEY = 'analyzer.enabledModules'
+const THEME_KEY = 'analyzer.theme'
 
 type FilingRef = { form: string; filingDate: string; reportDate: string; url: string }
+type ChartTab = 'income' | 'balance' | 'cash'
+type BottomTab = 'ratios' | 'rubric' | 'filing'
 
 export function formatMetric(m: Metric): string {
   if (m.value === null) return 'n/a'
@@ -21,140 +26,237 @@ export function formatMetric(m: Metric): string {
   switch (m.unit) {
     case '%': return `${(v * 100).toFixed(1)}%`
     case 'x': return `${v.toFixed(2)}x`
-    case 'days': return `${Math.round(v)} days`
-    case 'usd': return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 2 }).format(v)
+    case 'days': return `${Math.round(v)} d`
+    case 'usd': return compactUsd(v)
     case 'score': return m.id === 'piotroski' ? `${v} / 9` : v.toFixed(2)
     default: return String(v)
   }
 }
 
-const toneStyle: Record<Note['tone'], string> = {
-  good: 'text-(--vital-good)',
-  watch: 'text-(--prediction-warn)',
-  info: 'text-muted-foreground',
+const compactUsd = (v: number) =>
+  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 2 }).format(v)
+
+const scoreTone = (s: number | null) => (s === null ? 'text-(--muted)' : s >= 60 ? 'text-(--up)' : s >= 45 ? 'text-(--warn)' : 'text-(--down)')
+const scoreDepth = (s: number) => (s >= 60 ? 'var(--depth-up)' : s >= 45 ? 'var(--warn-bg)' : 'var(--depth-down)')
+const tierTone: Record<RatingResult['tier'], string> = {
+  Strong: 'bg-(--up-bg) text-(--up)',
+  Solid: 'bg-(--up-bg) text-(--up)',
+  Mixed: 'bg-(--warn-bg) text-(--warn)',
+  Weak: 'bg-(--down-bg) text-(--down)',
+  'Insufficient data': 'bg-(--panel-2) text-(--muted)',
 }
 
-function Chip({ children, className }: { children: ReactNode; className?: string }) {
-  return <span className={cn('inline-flex w-fit rounded-xl px-2.5 py-1 text-xs font-medium', className)}>{children}</span>
-}
-
-function NoteList({ notes }: { notes: Note[] }) {
-  if (!notes.length) return null
+function Panel({ title, right, children, className }: { title: string; right?: ReactNode; children: ReactNode; className?: string }) {
   return (
-    <ul className="flex flex-col gap-2">
-      {notes.map((n, i) => {
-        const Icon = n.tone === 'good' ? CheckCircle2 : n.tone === 'watch' ? AlertTriangle : Info
-        return (
-          <li key={i} className="flex items-start gap-3 rounded-xl bg-muted px-3 py-2.5">
-            <Icon className={cn('mt-0.5 size-4 shrink-0', toneStyle[n.tone])} />
-            <p className="text-sm">{n.text}</p>
-          </li>
-        )
-      })}
-    </ul>
-  )
-}
-
-function MetricCard({ m }: { m: Metric }) {
-  return (
-    <article className="flex min-w-0 flex-col gap-2 rounded-2xl border p-4">
-      <p className="text-sm font-medium tracking-tight">{m.label}</p>
-      <p className={cn('text-2xl leading-none font-semibold tracking-tight', m.value === null && 'text-muted-foreground')}>
-        {formatMetric(m)}
-      </p>
-      <p className="text-xs text-muted-foreground">{m.formula}</p>
-      {m.reason ? <p className="text-xs text-(--prediction-warn)">{m.reason}</p> : null}
-      {m.hint ? <p className="text-xs text-muted-foreground">{m.hint}</p> : null}
-      {m.inputs.length ? (
-        <details className="text-xs">
-          <summary className="cursor-pointer text-muted-foreground">Show inputs and XBRL tags</summary>
-          <table className="mt-2 w-full">
-            <tbody>
-              {m.inputs.map((i) => (
-                <tr key={i.label} className="border-t">
-                  <td className="py-1 pr-2">{i.label}</td>
-                  <td className="py-1 pr-2 text-right">
-                    {Number.isNaN(i.value) ? 'n/a' : Math.abs(i.value) >= 1e5 ? i.value.toLocaleString('en-US') : i.value}
-                  </td>
-                  <td className="py-1 text-muted-foreground">{i.tag}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </details>
-      ) : null}
-    </article>
-  )
-}
-
-function ModuleSection({ result, description }: { result: ModuleResult; description: string }) {
-  return (
-    <section className="flex flex-col gap-3.5">
-      <div className="flex flex-col gap-1">
-        <h2 className="text-lg font-medium">{result.title}</h2>
-        <p className="text-sm text-muted-foreground">{description}</p>
-      </div>
-      {result.metrics.length ? (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {result.metrics.map((m) => (
-            <MetricCard key={m.id} m={m} />
-          ))}
-        </div>
-      ) : null}
-      <NoteList notes={result.notes} />
+    <section className={cn('flex min-h-0 flex-col rounded-md border border-(--line) bg-(--panel)', className)}>
+      <header className="flex items-center justify-between gap-2 border-b border-(--line) px-3 py-2">
+        <h3 className="text-xs font-semibold tracking-wide text-(--accent) uppercase">{title}</h3>
+        {right}
+      </header>
+      {children}
     </section>
   )
 }
 
-const tierTone: Record<RatingResult['tier'], string> = {
-  Strong: 'bg-(--live)/10 text-(--live)',
-  Solid: 'bg-(--live)/10 text-(--live)',
-  Mixed: 'bg-(--chart-warn-bg) text-(--chart-warn)',
-  Weak: 'bg-(--insight-vitals)/10 text-(--insight-vitals)',
-  'Insufficient data': 'bg-muted text-muted-foreground',
+function Chip({ children, className }: { children: ReactNode; className?: string }) {
+  return <span className={cn('inline-flex w-fit rounded px-2 py-0.5 text-[11px] font-medium', className)}>{children}</span>
 }
 
-function RatingCard({ r }: { r: RatingResult }) {
+function Tab({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
   return (
-    <article className="flex flex-col gap-4 rounded-2xl border bg-[linear-gradient(180deg,rgb(99_102_241/0.08)_0%,transparent_42%)] p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-col gap-1">
-          <h2 className="text-lg font-medium">Screening rating</h2>
-          <p className="text-xs text-muted-foreground">
-            Based on {r.used} of {r.total} categories with enough data. Rubric tables are in <code>src/modules/rating.ts</code>.
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Chip className={cn('text-base', tierTone[r.tier])}>{r.tier}</Chip>
-          <p className="text-3xl font-semibold tracking-tight">{r.composite === null ? '-' : Math.round(r.composite)}</p>
-        </div>
-      </div>
-      <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-5">
-        {r.categories.map((c) => (
-          <div key={c.id} className="flex flex-col gap-2 rounded-xl bg-background p-3">
-            <p className="text-sm font-medium">{c.label}</p>
-            <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-              <div className="h-full rounded-full bg-(--bionis-blue)" style={{ width: `${c.score ?? 0}%` }} />
-            </div>
-            <p className="text-xs text-muted-foreground">{c.score === null ? 'Not enough data' : `${Math.round(c.score)} / 100`}</p>
-            <ul className="text-xs text-muted-foreground">
-              {c.basis.map((b) => (
-                <li key={b}>{b}</li>
-              ))}
-            </ul>
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn('rounded px-2.5 py-1 text-xs', active ? 'bg-(--panel-2) font-semibold text-(--accent)' : 'text-(--muted) hover:text-(--fg)')}
+    >
+      {children}
+    </button>
+  )
+}
+
+const CHART_ITEMS: Record<ChartTab, { label: string; items: LineItem[] }> = {
+  income: { label: 'Income', items: ['revenue', 'grossProfit', 'operatingIncome', 'netIncome'] },
+  balance: { label: 'Balance sheet', items: ['assets', 'liabilities', 'equity', 'cash', 'debt'] },
+  cash: { label: 'Cash flow', items: ['ocf', 'capex', 'da'] },
+}
+
+function chartSources(fin: Financials, tab: ChartTab): { cur: Items; prior: Items; curLabel: string; priorLabel: string } {
+  if (tab === 'balance') return { cur: fin.bsCur, prior: fin.bsPrior, curLabel: fin.meta.periodEnd, priorLabel: 'prior year-end' }
+  if (tab === 'cash') return { cur: fin.ytd, prior: fin.ytdPrior, curLabel: fin.basis === 'quarter' ? 'YTD' : 'FY', priorLabel: 'prior YTD' }
+  return { cur: fin.cur, prior: fin.prior, curLabel: fin.basis === 'quarter' ? 'quarter' : 'FY', priorLabel: fin.basis === 'quarter' ? 'prior-yr quarter' : 'prior FY' }
+}
+
+function FundamentalsChart({ fin, tab }: { fin: Financials; tab: ChartTab }) {
+  const src = chartSources(fin, tab)
+  const rows = CHART_ITEMS[tab].items
+    .filter((i) => src.cur[i] || src.prior[i])
+    .map((i) => ({
+      name: LINE_ITEM_LABELS[i],
+      cur: src.cur[i]?.value ?? 0,
+      prior: src.prior[i]?.value ?? 0,
+      has: !!src.cur[i],
+      hasPrior: !!src.prior[i],
+    }))
+  if (!rows.length) return <p className="p-6 text-(--muted)">No data for this view in the filing.</p>
+  return (
+    <div className="h-72 px-2 pb-2">
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={rows} margin={{ top: 12, right: 12, bottom: 0, left: 4 }} barGap={3}>
+          <CartesianGrid vertical={false} stroke="var(--line)" />
+          <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'var(--muted)' }} tickLine={false} axisLine={false} />
+          <YAxis tick={{ fontSize: 11, fill: 'var(--muted)' }} tickLine={false} axisLine={false} tickFormatter={(v) => compactUsd(v).replace('.00', '')} width={64} />
+          <Tooltip
+            cursor={{ fill: 'var(--panel-2)' }}
+            content={({ active, payload }) => {
+              if (!active || !payload?.length) return null
+              const p = payload[0].payload as (typeof rows)[number]
+              const chg = p.hasPrior && p.prior !== 0 ? (p.cur - p.prior) / Math.abs(p.prior) : null
+              return (
+                <div className="rounded border border-(--line) bg-(--panel) px-3 py-2 text-xs text-(--fg) shadow-lg">
+                  <p className="font-semibold">{p.name}</p>
+                  <p className="num">{src.curLabel}: {p.has ? compactUsd(p.cur) : 'n/a'}</p>
+                  <p className="num text-(--muted)">{src.priorLabel}: {p.hasPrior ? compactUsd(p.prior) : 'n/a'}</p>
+                  {chg !== null ? <p className={cn('num', chg >= 0 ? 'text-(--up)' : 'text-(--down)')}>{chg >= 0 ? '+' : ''}{(chg * 100).toFixed(1)}%</p> : null}
+                </div>
+              )
+            }}
+          />
+          <Bar dataKey="prior" fill="var(--line)" radius={[3, 3, 0, 0]} maxBarSize={36} />
+          <Bar dataKey="cur" radius={[3, 3, 0, 0]} maxBarSize={36}>
+            {rows.map((r) => (
+              <Cell key={r.name} fill={r.cur >= r.prior ? 'var(--up)' : 'var(--down)'} />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
+function StatStrip({ fin }: { fin: Financials }) {
+  const src = chartSources(fin, 'income')
+  const items: LineItem[] = ['revenue', 'operatingIncome', 'netIncome', 'epsDiluted']
+  return (
+    <div className="grid grid-cols-2 gap-px bg-(--line) sm:grid-cols-4">
+      {items.map((i) => {
+        const cur = src.cur[i]?.value
+        const prior = src.prior[i]?.value
+        const chg = cur !== undefined && prior !== undefined && prior > 0 ? (cur - prior) / prior : null
+        return (
+          <div key={i} className="bg-(--panel) px-3 py-2">
+            <p className="text-[11px] text-(--muted)">{LINE_ITEM_LABELS[i]}</p>
+            <p className="num text-base font-semibold">{cur === undefined ? 'n/a' : i === 'epsDiluted' ? `$${cur.toFixed(2)}` : compactUsd(cur)}</p>
+            {chg !== null ? <p className={cn('num text-xs', chg >= 0 ? 'text-(--up)' : 'text-(--down)')}>{chg >= 0 ? '+' : ''}{(chg * 100).toFixed(1)}%</p> : <p className="text-xs text-(--muted)">-</p>}
           </div>
-        ))}
-      </div>
-      <p className="rounded-xl bg-muted px-3 py-2 text-xs text-muted-foreground">
-        This is a rules-based screen of one filing, not personalized investment advice and not a recommendation to buy, sell
-        or hold any security. It ignores price, industry context, management and everything outside the financial statements.
+        )
+      })}
+    </div>
+  )
+}
+
+function RatioTable({ metrics }: { metrics: { moduleTitle: string; m: Metric }[] }) {
+  const [open, setOpen] = useState<string | null>(null)
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-150 text-left">
+        <thead>
+          <tr className="border-b border-(--line) text-[11px] text-(--muted)">
+            <th className="px-3 py-1.5 font-medium">Module</th>
+            <th className="px-3 py-1.5 font-medium">Metric</th>
+            <th className="px-3 py-1.5 text-right font-medium">Value</th>
+            <th className="px-3 py-1.5 text-right font-medium">Score</th>
+            <th className="px-3 py-1.5 font-medium">Formula</th>
+          </tr>
+        </thead>
+        <tbody>
+          {metrics.map(({ moduleTitle, m }) => {
+            const s = scoreMetric(m.id, m.value)
+            return (
+              <Fragment key={m.id}>
+                <tr onClick={() => setOpen(open === m.id ? null : m.id)} className="cursor-pointer border-b border-(--line) hover:bg-(--panel-2)">
+                  <td className="px-3 py-1.5 text-(--muted)">{moduleTitle}</td>
+                  <td className="px-3 py-1.5 font-medium">{m.label}</td>
+                  <td className={cn('num px-3 py-1.5 text-right', m.value === null && 'text-(--muted)')}>{formatMetric(m)}</td>
+                  <td className={cn('num px-3 py-1.5 text-right', scoreTone(s))}>{s === null ? '-' : Math.round(s)}</td>
+                  <td className="px-3 py-1.5 text-xs text-(--muted)">{m.reason ?? m.formula}</td>
+                </tr>
+                {open === m.id ? (
+                  <tr className="border-b border-(--line) bg-(--panel-2)">
+                    <td colSpan={5} className="px-3 py-2 text-xs">
+                      <p className="mb-1 text-(--muted)">{m.formula}{m.hint ? ` · ${m.hint}` : ''}</p>
+                      {m.inputs.length ? (
+                        <table className="w-full max-w-2xl">
+                          <tbody>
+                            {m.inputs.map((i) => (
+                              <tr key={i.label}>
+                                <td className="py-0.5 pr-3">{i.label}</td>
+                                <td className="num py-0.5 pr-3 text-right">{Number.isNaN(i.value) ? 'n/a' : Math.abs(i.value) >= 1e5 ? i.value.toLocaleString('en-US') : i.value}</td>
+                                <td className="py-0.5 text-(--muted)">{i.tag}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      ) : (
+                        <p className="text-(--muted)">{m.reason ?? 'No inputs.'}</p>
+                      )}
+                    </td>
+                  </tr>
+                ) : null}
+              </Fragment>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function RubricTable() {
+  return (
+    <div className="flex flex-col gap-3 p-3 text-xs">
+      <p className="text-(--muted)">
+        Each metric maps to 0-100 through these tiers. A category is the mean of its available metric scores; the composite is the mean of available categories.
+        Strong is 75+, Solid 60+, Mixed 45+, Weak below. Altman Z&apos;&apos; scores 100 above 2.6, 55 from 1.1 to 2.6, 10 below. Liabilities/assets scores 100 at or under 40%, 75 to 60%, 50 to 80%, else 25.
       </p>
-    </article>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-120 text-left">
+          <thead>
+            <tr className="border-b border-(--line) text-[11px] text-(--muted)">
+              <th className="py-1.5 font-medium">Metric</th>
+              <th className="py-1.5 font-medium">Tiers (at least threshold gives score)</th>
+              <th className="py-1.5 font-medium">Otherwise</th>
+            </tr>
+          </thead>
+          <tbody>
+            {Object.entries(RUBRIC_TABLES)
+              .filter(([id]) => id !== 'liabilities-assets')
+              .map(([id, t]) => (
+                <tr key={id} className="border-b border-(--line)">
+                  <td className="py-1.5 font-medium">{t.label}</td>
+                  <td className="num py-1.5">{t.tiers.map(([min, s]) => `>= ${t.pct ? `${(min * 100).toFixed(0)}%` : min} → ${s}`).join(' · ')}</td>
+                  <td className="num py-1.5">{t.floor}</td>
+                </tr>
+              ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+function NoteRow({ n }: { n: Note }) {
+  const dot = n.tone === 'good' ? 'bg-(--up)' : n.tone === 'watch' ? 'bg-(--warn)' : 'bg-(--muted)'
+  return (
+    <li className="flex gap-2 border-b border-(--line) px-3 py-2 last:border-0">
+      <span className={cn('mt-1.5 size-1.5 shrink-0 rounded-full', dot)} />
+      <p className="text-xs leading-relaxed">{n.text}</p>
+    </li>
   )
 }
 
 export function Analyzer() {
   const [fin, setFin] = useState<Financials | null>(null)
+  const [history, setHistory] = useState<Financials[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [price, setPrice] = useState('')
@@ -162,18 +264,23 @@ export function Analyzer() {
   const [formType, setFormType] = useState<'10-K' | '10-Q'>('10-K')
   const [filings, setFilings] = useState<FilingRef[] | null>(null)
   const [enabled, setEnabled] = useState<Set<string>>(new Set(RATIO_MODULES.map((m) => m.id)))
+  const [dark, setDark] = useState(true)
   const [drag, setDrag] = useState(false)
+  const [chartTab, setChartTab] = useState<ChartTab>('income')
+  const [bottomTab, setBottomTab] = useState<BottomTab>('ratios')
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY)
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- restoring a persisted preference after hydration
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- restoring persisted preferences after hydration
       if (raw) setEnabled(new Set(JSON.parse(raw) as string[]))
+      const t = localStorage.getItem(THEME_KEY)
+      if (t) setDark(t === 'dark')
     } catch {}
   }, [])
 
-  const toggle = (id: string) => {
+  const toggleModule = (id: string) => {
     setEnabled((prev) => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
@@ -185,11 +292,25 @@ export function Analyzer() {
     })
   }
 
+  const toggleTheme = () => {
+    setDark((d) => {
+      try {
+        localStorage.setItem(THEME_KEY, d ? 'light' : 'dark')
+      } catch {}
+      return !d
+    })
+  }
+
   const results = useMemo(() => {
     if (!fin) return null
     const p = Number(price)
     return runModules({ ...fin, price: p > 0 ? p : undefined }, enabled)
   }, [fin, price, enabled])
+
+  const present = (f: Financials) => {
+    setFin(f)
+    setHistory((h) => [f, ...h.filter((x) => !(x.meta.name === f.meta.name && x.meta.form === f.meta.form && x.meta.periodEnd === f.meta.periodEnd))].slice(0, 12))
+  }
 
   async function handleFile(file: File) {
     setError(null)
@@ -202,9 +323,8 @@ export function Analyzer() {
     try {
       const parsed = parseIxbrl(await file.text())
       if (!isIxbrl(parsed)) throw new NotIxbrlError('This file has no inline-XBRL data. Download the main .htm document of a 2019 or later 10-K / 10-Q from EDGAR.')
-      setFin(normalize(parsed))
+      present(normalize(parsed))
     } catch (e) {
-      setFin(null)
       setError(e instanceof Error ? e.message : 'Could not read that filing.')
     } finally {
       setLoading(false)
@@ -236,7 +356,7 @@ export function Analyzer() {
       const res = await fetch(`/api/edgar?url=${encodeURIComponent(url)}`)
       const body = await res.json()
       if (!res.ok) throw new Error(body.error ?? 'Could not load that filing.')
-      setFin(body.financials)
+      present(body.financials)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load that filing.')
     } finally {
@@ -244,138 +364,269 @@ export function Analyzer() {
     }
   }
 
-  return (
-    <div className="bionis-dashboard flex h-svh overflow-hidden">
-      <aside className="hidden w-72 shrink-0 flex-col gap-5 overflow-y-auto border-r bg-(--sidebar) p-4 md:flex">
-        <div className="flex items-center gap-2 px-2 pt-1">
-          <span className="flex size-7 items-center justify-center rounded-md bg-(--bionis-blue) text-white">
-            <FileText className="size-4" />
-          </span>
-          <span className="text-lg font-medium tracking-tight">Filing Analyzer</span>
-        </div>
-        <div className="flex flex-col gap-1">
-          <p className="px-2 text-xs font-medium text-muted-foreground">MODULES</p>
-          {RATIO_MODULES.map((m) => (
-            <label key={m.id} className="flex cursor-pointer items-start gap-2.5 rounded-lg px-3 py-2 text-sm hover:bg-background/60">
-              <input type="checkbox" className="mt-1" checked={enabled.has(m.id)} onChange={() => toggle(m.id)} />
-              <span className="flex flex-col">
-                <span className="font-medium">{m.title}</span>
-                <span className="text-xs text-muted-foreground">{m.description}</span>
-              </span>
-            </label>
-          ))}
-        </div>
-        <p className="mt-auto rounded-xl border bg-background p-3 text-xs text-muted-foreground">
-          Uploaded files are parsed in your browser and never sent anywhere. Ticker lookups go through this app&apos;s server to SEC EDGAR.
-        </p>
-      </aside>
+  const rating = results?.rating?.rating
+  const allMetrics = results
+    ? RATIO_MODULES.filter((m) => results[m.id]).flatMap((m) => results[m.id].metrics.map((metric) => ({ moduleTitle: m.title, m: metric })))
+    : []
+  const book = allMetrics.filter(({ m }) => m.value !== null)
+  const ratingOf = (f: Financials) => {
+    const r = runModules(f, enabled).rating?.rating
+    return r?.composite == null ? null : Math.round(r.composite)
+  }
 
-      <main className="min-w-0 flex-1 overflow-y-auto px-4 py-6 md:px-8 md:py-10">
-        <div className="flex flex-col gap-8">
-          <div className="flex flex-col gap-2">
-            <h1 className="text-xl font-medium md:text-2xl">{fin ? fin.meta.name : 'Analyze a 10-K or 10-Q'}</h1>
+  return (
+    <div className={cn('terminal flex h-svh flex-col overflow-hidden', dark && 'dark')}>
+      <nav className="flex h-11 shrink-0 items-center justify-between gap-4 border-b border-(--line) bg-(--panel) px-3">
+        <div className="flex items-center gap-5">
+          <div className="flex items-center gap-2">
+            <span className="flex h-5 items-end gap-0.5" aria-hidden>
+              <i className="block h-3 w-1 bg-(--down)" />
+              <i className="block h-5 w-1 bg-(--up)" />
+              <i className="block h-4 w-1 bg-(--down)" />
+            </span>
+            <span className="text-base font-bold tracking-wide">FILINGS</span>
+          </div>
+          <span className="hidden text-xs text-(--muted) sm:inline">Analyzer · 10-K / 10-Q screening terminal</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <details className="relative">
+            <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded px-2 py-1 text-xs text-(--muted) hover:text-(--fg)">
+              <SlidersHorizontal className="size-3.5" /> Modules
+            </summary>
+            <div className="absolute right-0 z-20 mt-1 flex w-72 flex-col gap-0.5 rounded-md border border-(--line) bg-(--panel) p-2 shadow-xl">
+              {RATIO_MODULES.map((m) => (
+                <label key={m.id} className="flex cursor-pointer items-start gap-2 rounded px-2 py-1.5 hover:bg-(--panel-2)">
+                  <input type="checkbox" className="mt-0.5" checked={enabled.has(m.id)} onChange={() => toggleModule(m.id)} />
+                  <span>
+                    <span className="block text-xs font-semibold">{m.title}</span>
+                    <span className="block text-[11px] text-(--muted)">{m.description}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </details>
+          <button type="button" onClick={toggleTheme} aria-label="Toggle theme" className="rounded p-1.5 text-(--muted) hover:text-(--fg)">
+            {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
+          </button>
+        </div>
+      </nav>
+
+      <div className="shrink-0 border-b border-(--line) bg-(--panel-2) px-3 py-1 text-[11px] text-(--muted)">
+        Rules-based screen of a single filing. Not personalized investment advice and not a recommendation to buy, sell or hold any security. Uploaded files are parsed in your browser.
+      </div>
+
+      <main className="grid min-h-0 flex-1 grid-cols-1 gap-2 overflow-y-auto p-2 lg:grid-cols-[280px_minmax(0,1fr)_340px] lg:overflow-hidden">
+        {/* Left: watchlist + observations */}
+        <div className="flex min-h-0 flex-col gap-2 lg:overflow-y-auto">
+          <Panel title="Analyzed" className="shrink-0">
+            <div className="max-h-72 overflow-y-auto">
+              {history.length === 0 ? (
+                <p className="px-3 py-4 text-xs text-(--muted)">Filings you load appear here with their screening score.</p>
+              ) : (
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="text-[11px] text-(--muted)">
+                      <th className="px-3 py-1.5 font-medium">Company</th>
+                      <th className="px-3 py-1.5 text-right font-medium">Score</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {history.map((h) => {
+                      const s = ratingOf(h)
+                      const active = fin === h
+                      return (
+                        <tr key={`${h.meta.name}${h.meta.form}${h.meta.periodEnd}`} onClick={() => setFin(h)} className={cn('cursor-pointer border-t border-(--line) hover:bg-(--panel-2)', active && 'bg-(--panel-2)')}>
+                          <td className="px-3 py-1.5">
+                            <span className="block font-semibold">{h.meta.ticker ?? h.meta.name}</span>
+                            <span className="block text-[11px] text-(--muted)">{h.meta.form} · {h.meta.periodEnd}</span>
+                          </td>
+                          <td className={cn('num px-3 py-1.5 text-right text-sm font-semibold', scoreTone(s))}>{s ?? '-'}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </Panel>
+          <Panel title="Observations" className="min-h-40 flex-1">
+            <ul className="min-h-0 overflow-y-auto">
+              {results ? results.notes.notes.map((n, i) => <NoteRow key={i} n={n} />) : <li className="px-3 py-4 text-xs text-(--muted)">Load a filing to see rule-triggered observations.</li>}
+            </ul>
+          </Panel>
+        </div>
+
+        {/* Center: header, chart, loader, tables */}
+        <div className="flex min-h-0 flex-col gap-2 lg:overflow-y-auto">
+          <Panel
+            title={fin ? `${fin.meta.ticker ?? ''} ${fin.meta.name}`.trim() : 'No filing loaded'}
+            right={
+              fin ? (
+                <div className="flex items-center gap-2 text-[11px] text-(--muted)">
+                  <Chip className="bg-(--panel-2) text-(--fg)">{fin.meta.form}{fin.meta.fiscalPeriod ? ` ${fin.meta.fiscalPeriod}` : ''}</Chip>
+                  <span className="num">period end {fin.meta.periodEnd}</span>
+                  {fin.meta.sourceUrl ? <a className="text-(--accent) underline" href={fin.meta.sourceUrl} target="_blank" rel="noreferrer">filing</a> : null}
+                </div>
+              ) : null
+            }
+            className="shrink-0"
+          >
             {fin ? (
-              <div className="flex flex-wrap gap-2">
-                <Chip className="bg-muted text-muted-foreground">
-                  {fin.meta.form} {fin.meta.fiscalPeriod ? `· ${fin.meta.fiscalPeriod}` : ''} · period ending {fin.meta.periodEnd}
-                </Chip>
-                {fin.meta.ticker ? <Chip className="bg-muted text-muted-foreground">{fin.meta.ticker}</Chip> : null}
-                {fin.basis === 'quarter' ? (
-                  <Chip className="bg-(--chart-warn-bg) text-(--chart-warn)">Quarter: income ratios annualized x4; cash flow is year-to-date</Chip>
+              <>
+                <StatStrip fin={fin} />
+                <div className="flex items-center gap-1 border-b border-(--line) px-2 py-1.5">
+                  {(Object.keys(CHART_ITEMS) as ChartTab[]).map((t) => (
+                    <Tab key={t} active={chartTab === t} onClick={() => setChartTab(t)}>{CHART_ITEMS[t].label}</Tab>
+                  ))}
+                  <span className="ml-auto text-[11px] text-(--muted)">
+                    {fin.basis === 'quarter' ? 'Quarter vs. same quarter last year; cash flow is year-to-date' : 'Fiscal year vs. prior fiscal year'} · bar color: up/down vs. prior
+                  </span>
+                </div>
+                <FundamentalsChart fin={fin} tab={chartTab} />
+              </>
+            ) : (
+              <p className="px-4 py-16 text-center text-sm text-(--muted)">Look up a ticker or upload an EDGAR inline-XBRL filing below.</p>
+            )}
+          </Panel>
+
+          <Panel title="Load filing" className="shrink-0">
+            <div className="grid grid-cols-1 gap-3 p-3 md:grid-cols-2">
+              <div className="flex flex-col gap-2">
+                <p className="text-xs font-semibold">Look up by ticker</p>
+                <div className="flex gap-2">
+                  <input value={ticker} onChange={(e) => setTicker(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void searchTicker()} placeholder="AAPL" aria-label="Ticker" className="num h-8 w-24 px-2 uppercase" />
+                  <select value={formType} onChange={(e) => setFormType(e.target.value as '10-K' | '10-Q')} aria-label="Form type" className="h-8 px-2">
+                    <option>10-K</option>
+                    <option>10-Q</option>
+                  </select>
+                  <button type="button" onClick={() => void searchTicker()} className="flex h-8 items-center gap-1.5 rounded bg-(--up) px-3 text-xs font-bold text-black">
+                    <Search className="size-3.5" /> FIND
+                  </button>
+                </div>
+                {filings?.length ? (
+                  <ul className="flex flex-col">
+                    {filings.map((f) => (
+                      <li key={f.url}>
+                        <button type="button" onClick={() => void loadFiling(f.url)} className="flex w-full items-center justify-between border-b border-(--line) px-2 py-1.5 text-left text-xs hover:bg-(--panel-2)">
+                          <span className="num">{f.form} · {f.reportDate}</span>
+                          <span className="num text-(--muted)">filed {f.filingDate}</span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
                 ) : null}
-                {fin.meta.sourceUrl ? (
-                  <a className="text-xs underline" href={fin.meta.sourceUrl} target="_blank" rel="noreferrer">
-                    Source filing
-                  </a>
-                ) : null}
+                <label className="flex items-center gap-2 text-[11px] text-(--muted)">
+                  Share price (optional, enables valuation)
+                  <input value={price} onChange={(e) => setPrice(e.target.value)} inputMode="decimal" placeholder="185.50" className="num h-7 w-24 px-2 text-xs" />
+                </label>
+              </div>
+              <div
+                onDragOver={(e) => { e.preventDefault(); setDrag(true) }}
+                onDragLeave={() => setDrag(false)}
+                onDrop={(e) => { e.preventDefault(); setDrag(false); const f = e.dataTransfer.files[0]; if (f) void handleFile(f) }}
+                className={cn('flex flex-col items-center justify-center gap-1.5 rounded border border-dashed border-(--line) p-4 text-center', drag && 'bg-(--panel-2)')}
+              >
+                <Upload className="size-4 text-(--muted)" />
+                <p className="text-xs font-semibold">Drop a 10-K / 10-Q .htm file</p>
+                <p className="text-[11px] text-(--muted)">Main EDGAR document, 2019 or later</p>
+                <input ref={fileRef} type="file" accept=".htm,.html,.xhtml" className="hidden" onChange={(e) => e.target.files?.[0] && void handleFile(e.target.files[0])} />
+                <button type="button" onClick={() => fileRef.current?.click()} className="rounded border border-(--line) px-3 py-1 text-xs hover:bg-(--panel-2)">Choose file</button>
+              </div>
+            </div>
+            {loading ? <p className="px-3 pb-3 text-xs text-(--muted)">Working...</p> : null}
+            {error ? <p className="mx-3 mb-3 rounded bg-(--down-bg) px-3 py-2 text-xs text-(--down)">{error}</p> : null}
+          </Panel>
+
+          <Panel
+            title="Details"
+            className="min-h-60 shrink-0"
+            right={
+              <div className="flex gap-1">
+                <Tab active={bottomTab === 'ratios'} onClick={() => setBottomTab('ratios')}>Ratios</Tab>
+                <Tab active={bottomTab === 'rubric'} onClick={() => setBottomTab('rubric')}>Rubric</Tab>
+                <Tab active={bottomTab === 'filing'} onClick={() => setBottomTab('filing')}>Filing</Tab>
+              </div>
+            }
+          >
+            {bottomTab === 'rubric' ? (
+              <RubricTable />
+            ) : bottomTab === 'filing' ? (
+              fin ? (
+                <dl className="grid grid-cols-[140px_1fr] gap-x-3 gap-y-1.5 p-3 text-xs">
+                  {[
+                    ['Company', fin.meta.name], ['Ticker', fin.meta.ticker ?? '-'], ['CIK', fin.meta.cik ?? '-'], ['Form', `${fin.meta.form} ${fin.meta.fiscalPeriod}`],
+                    ['Period end', fin.meta.periodEnd], ['Basis', fin.basis === 'annual' ? 'Annual' : 'Quarter (income ratios annualized x4; cash flow year-to-date)'],
+                    ['Balance-sheet comparison', fin.bsPrior.assets ? 'prior fiscal year-end' : 'not found'],
+                  ].map(([k, v]) => (
+                    <Fragment key={k}>
+                      <dt className="text-(--muted)">{k}</dt>
+                      <dd className="num">{v}</dd>
+                    </Fragment>
+                  ))}
+                </dl>
+              ) : (
+                <p className="p-4 text-xs text-(--muted)">No filing loaded.</p>
+              )
+            ) : results ? (
+              <RatioTable metrics={allMetrics} />
+            ) : (
+              <p className="p-4 text-xs text-(--muted)">Ratios appear here once a filing is loaded. Click a row to see its inputs and XBRL tags.</p>
+            )}
+          </Panel>
+        </div>
+
+        {/* Right: rating + ratio book */}
+        <div className="flex min-h-0 flex-col gap-2 lg:overflow-y-auto">
+          <Panel title="Screening rating" className="shrink-0">
+            {rating ? (
+              <div className="flex flex-col gap-3 p-3">
+                <div className="flex items-end justify-between">
+                  <div>
+                    <p className={cn('num text-4xl leading-none font-bold', scoreTone(rating.composite))}>{rating.composite === null ? '-' : Math.round(rating.composite)}</p>
+                    <p className="mt-1 text-[11px] text-(--muted)">composite of {rating.used} of {rating.total} categories</p>
+                  </div>
+                  <Chip className={cn('text-sm', tierTone[rating.tier])}>{rating.tier}</Chip>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  {rating.categories.map((c) => (
+                    <div key={c.id} title={c.basis.join('\n')} className="relative flex items-center justify-between overflow-hidden rounded px-2 py-1">
+                      <span className="absolute inset-y-0 left-0" style={{ width: `${c.score ?? 0}%`, background: c.score === null ? 'transparent' : scoreDepth(c.score) }} />
+                      <span className="relative text-xs">{c.label}</span>
+                      <span className={cn('num relative text-xs font-semibold', scoreTone(c.score))}>{c.score === null ? 'n/a' : Math.round(c.score)}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
             ) : (
-              <p className="max-w-2xl text-sm text-muted-foreground">
-                Drop in an EDGAR inline-XBRL filing or look one up by ticker. The app extracts the financial statements and computes ratios, quality scores and a
-                transparent rules-based screening rating, with every input traceable to its XBRL tag.
-              </p>
+              <p className="px-3 py-6 text-center text-xs text-(--muted)">No rating yet.</p>
             )}
-          </div>
+          </Panel>
 
-          <section className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-            <div
-              onDragOver={(e) => {
-                e.preventDefault()
-                setDrag(true)
-              }}
-              onDragLeave={() => setDrag(false)}
-              onDrop={(e) => {
-                e.preventDefault()
-                setDrag(false)
-                const f = e.dataTransfer.files[0]
-                if (f) void handleFile(f)
-              }}
-              className={cn('flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed p-6 text-center', drag && 'bg-muted')}
-            >
-              <Upload className="size-5 text-muted-foreground" />
-              <p className="text-sm font-medium">Drop a 10-K / 10-Q .htm file</p>
-              <p className="text-xs text-muted-foreground">Main document from EDGAR, 2019 or later</p>
-              <input ref={fileRef} type="file" accept=".htm,.html,.xhtml" className="hidden" onChange={(e) => e.target.files?.[0] && void handleFile(e.target.files[0])} />
-              <button type="button" onClick={() => fileRef.current?.click()} className="rounded-lg border px-3 py-1.5 text-sm hover:bg-muted">
-                Choose file
-              </button>
+          <Panel title="Ratio book" className="min-h-60 flex-1" right={<span className="text-[11px] text-(--muted)">metric · value · score</span>}>
+            <div className="min-h-0 overflow-y-auto">
+              {book.length ? (
+                <table className="w-full text-left">
+                  <tbody>
+                    {book.map(({ m }) => {
+                      const s = scoreMetric(m.id, m.value)
+                      return (
+                        <tr key={m.id} className="relative border-b border-(--line)">
+                          <td className="relative px-3 py-1.5">
+                            {s !== null ? <span className="absolute inset-y-0 right-0" style={{ width: `${s}%`, background: scoreDepth(s) }} /> : null}
+                            <span className="relative text-xs">{m.label}</span>
+                          </td>
+                          <td className={cn('num px-2 py-1.5 text-right text-xs', scoreTone(s))}>{formatMetric(m)}</td>
+                          <td className="num px-3 py-1.5 text-right text-xs text-(--muted)">{s === null ? '' : Math.round(s)}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              ) : (
+                <p className="px-3 py-6 text-center text-xs text-(--muted)">Metrics appear here once a filing is loaded.</p>
+              )}
             </div>
-
-            <div className="flex flex-col gap-3 rounded-2xl border p-4">
-              <p className="text-sm font-medium">Or look up by ticker</p>
-              <div className="flex gap-2">
-                <input
-                  value={ticker}
-                  onChange={(e) => setTicker(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && void searchTicker()}
-                  placeholder="AAPL"
-                  className="h-9 w-28 rounded-lg border bg-background px-3 text-sm uppercase"
-                  aria-label="Ticker"
-                />
-                <select value={formType} onChange={(e) => setFormType(e.target.value as '10-K' | '10-Q')} className="h-9 rounded-lg border bg-background px-2 text-sm" aria-label="Form type">
-                  <option>10-K</option>
-                  <option>10-Q</option>
-                </select>
-                <button type="button" onClick={() => void searchTicker()} className="flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3 text-sm text-primary-foreground">
-                  <Search className="size-4" /> Find
-                </button>
-              </div>
-              {filings?.length ? (
-                <ul className="flex flex-col gap-1.5">
-                  {filings.map((f) => (
-                    <li key={f.url}>
-                      <button type="button" onClick={() => void loadFiling(f.url)} className="flex w-full items-center justify-between rounded-lg bg-muted px-3 py-2 text-left text-sm hover:bg-muted/70">
-                        <span>
-                          {f.form} · period {f.reportDate}
-                        </span>
-                        <span className="text-xs text-muted-foreground">filed {f.filingDate}</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-              <label className="flex items-center gap-2 text-xs text-muted-foreground">
-                Share price (optional, enables valuation)
-                <input value={price} onChange={(e) => setPrice(e.target.value)} inputMode="decimal" placeholder="e.g. 185.50" className="h-8 w-28 rounded-lg border bg-background px-2 text-sm text-foreground" />
-              </label>
-            </div>
-          </section>
-
-          {loading ? <p className="text-sm text-muted-foreground">Working...</p> : null}
-          {error ? <p className="rounded-xl bg-(--insight-vitals)/10 px-3 py-2 text-sm text-(--insight-vitals)">{error}</p> : null}
-
-          {fin && results ? (
-            <>
-              {results.rating?.rating ? <RatingCard r={results.rating.rating} /> : null}
-              <section className="flex flex-col gap-3.5">
-                <h2 className="text-lg font-medium">Observations</h2>
-                <NoteList notes={results.notes.notes} />
-              </section>
-              {ALL_MODULES.filter((m) => results[m.id] && !['rating', 'notes'].includes(m.id)).map((m) => (
-                <ModuleSection key={m.id} result={results[m.id]} description={m.description} />
-              ))}
-            </>
-          ) : null}
+          </Panel>
         </div>
       </main>
     </div>
