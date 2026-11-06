@@ -1,5 +1,5 @@
 import type { Financials, Items, LineItem, Value } from '../financials'
-import type { ParsedFiling, Period } from './parse'
+import { toIsoDate, type ParsedFiling, type Period } from './parse'
 
 /** Ordered us-gaap tag fallbacks per income-statement / cash-flow item. */
 export const FLOW_TAGS: Partial<Record<LineItem, string[]>> = {
@@ -207,7 +207,7 @@ export function normalize(parsed: ParsedFiling, sourceUrl?: string): Financials 
   const form = parsed.cover['dei:DocumentType'] ?? ''
   const basis: Financials['basis'] = form.toUpperCase().startsWith('10-K') ? 'annual' : 'quarter'
 
-  let periodEnd = parsed.cover['dei:DocumentPeriodEndDate'] ?? ''
+  let periodEnd = toIsoDate(parsed.cover['dei:DocumentPeriodEndDate'] ?? '')
   if (!/^\d{4}-\d{2}-\d{2}$/.test(periodEnd)) {
     const ends = Object.values(parsed.contexts)
       .filter((c) => !c.dimensional)

@@ -27,6 +27,16 @@ describe('parseIxbrl', () => {
     expect(p.facts.find((f) => f.name === 'us-gaap:Bar')!.value).toBe(0)
   })
 
+  it('keeps text of nested ix elements (date split across two tags)', () => {
+    const html = buildFixture().replace(
+      '>December 31, 2024<',
+      '><ix:nonNumeric name="dei:CurrentFiscalYearEndDate" contextRef="FY24">December 31</ix:nonNumeric>, 2024<',
+    )
+    const p = parseIxbrl(html)
+    expect(p.cover['dei:DocumentPeriodEndDate']).toBe('December 31, 2024')
+    expect(normalize(p).meta.periodEnd).toBe('2024-12-31')
+  })
+
   it('converts long dates', () => {
     expect(toIsoDate('September 28, 2024')).toBe('2024-09-28')
     expect(toIsoDate('2024-09-28')).toBe('2024-09-28')

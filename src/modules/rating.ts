@@ -33,7 +33,7 @@ const CATEGORIES: { id: string; label: string; metrics: string[] }[] = [
   { id: 'quality', label: 'Quality & distress', metrics: ['piotroski', 'altman'] },
 ]
 
-const fmtVal = (id: string, v: number) => (RUBRIC_TABLES[id]?.pct || id === 'liabilities-assets' ? `${(v * 100).toFixed(1)}%` : v.toFixed(2))
+const fmtVal = (id: string, v: number) => (id === 'piotroski' ? `${v} / 9` : RUBRIC_TABLES[id]?.pct || id === 'liabilities-assets' ? `${(v * 100).toFixed(1)}%` : v.toFixed(2))
 
 export function computeRating(results: Record<string, ModuleResult>): RatingResult {
   const all = Object.values(results).flatMap((r) => r.metrics)

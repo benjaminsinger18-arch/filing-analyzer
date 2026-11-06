@@ -105,8 +105,8 @@ export function parseIxbrl(html: string): ParsedFiling {
       },
       ontext(text) {
         if (textTarget) textBuffer += text
-        const top = collectors[collectors.length - 1]
-        if (top) top.text += text
+        // Nested ix elements (e.g. a date split across two tags) contribute to every open ancestor.
+        for (const c of collectors) c.text += text
       },
       onclosetag(name) {
         if (name === 'ix:nonfraction' || name === 'ix:nonnumeric') {

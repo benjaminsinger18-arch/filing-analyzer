@@ -8,13 +8,17 @@ export const notes: AnalysisModule = {
   title: 'Observations',
   description: 'Rule-triggered flags drawn from the other modules.',
   requires: [],
-  run(_fin, prior) {
+  run(fin, prior) {
     const m = (id: string) =>
       Object.values(prior)
         .flatMap((r: ModuleResult) => r.metrics)
         .find((x) => x.id === id)?.value ?? null
     const out: Note[] = []
     const add = (tone: Note['tone'], text: string) => out.push({ tone, text })
+
+    if (!fin.bsCur.currentAssets && !fin.cur.grossProfit) {
+      add('info', 'This looks like a bank, insurer or other filer without a classified balance sheet or gross profit. Liquidity, margin and turnover ratios are n/a, reported debt may be incomplete, and the Altman and rating results should be read with caution.')
+    }
 
     const om = m('operating-margin')
     if (om !== null) {
