@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "GTM Benchmark Dashboard",
-  description: "Illustrative B2B SaaS GTM benchmark dashboard",
+  title: "Filing Analyzer",
+  description: "Analyze SEC 10-K and 10-Q filings: ratios, quality scores and a transparent screening rating",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
