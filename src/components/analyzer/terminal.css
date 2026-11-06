@@ -1,0 +1,70 @@
+/* Exchange-terminal look: dense panels, green/red up/down colors, dark default with a light variant. */
+.terminal {
+  --bg: #f3f5f8;
+  --panel: #ffffff;
+  --panel-2: #f7f9fb;
+  --line: #e2e6ed;
+  --fg: #1b2430;
+  --muted: #6b7686;
+  --up: #12b76a;
+  --up-bg: rgb(18 183 106 / 0.14);
+  --down: #f0384a;
+  --down-bg: rgb(240 56 74 / 0.14);
+  --warn: #d98a00;
+  --warn-bg: rgb(217 138 0 / 0.14);
+  --accent: #2d7ff0;
+  --depth-up: rgb(18 183 106 / 0.22);
+  --depth-down: rgb(240 56 74 / 0.2);
+  background: var(--bg);
+  color: var(--fg);
+  font-family: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  font-size: 13px;
+}
+
+.terminal.dark {
+  --bg: #0a0d12;
+  --panel: #11151c;
+  --panel-2: #161b24;
+  --line: #1f2632;
+  --fg: #d5dbe5;
+  --muted: #7a8596;
+  --up: #26d97f;
+  --up-bg: rgb(38 217 127 / 0.15);
+  --down: #ff4757;
+  --down-bg: rgb(255 71 87 / 0.15);
+  --warn: #f5a524;
+  --warn-bg: rgb(245 165 36 / 0.15);
+  --accent: #3b8cff;
+  --depth-up: rgb(38 217 127 / 0.24);
+  --depth-down: rgb(255 71 87 / 0.24);
+}
+
+.terminal .num {
+  font-variant-numeric: tabular-nums;
+  font-family: 'JetBrains Mono', 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.terminal ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.terminal ::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 4px;
+}
+
+.terminal input,
+.terminal select {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  color: var(--fg);
+  border-radius: 4px;
+  outline: none;
+}
+.terminal input:focus,
+.terminal select:focus {
+  border-color: var(--accent);
+}
+.terminal input::placeholder {
+  color: var(--muted);
+}
