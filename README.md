@@ -53,5 +53,8 @@ Environment (`.env.local`, all optional except for the feature they enable):
 - Total debt sums the debt tags a company reports; check the trace for what was included.
 - A single filing cannot show trends beyond one comparison period.
 - "Fetch latest" fetches the price (Alpha Vantage, else Yahoo) and, with a Finnhub key, provider ratios. It is on demand to protect free-tier quotas. The price date is shown next to valuation and usually differs from the filing period.
+- The Modules menu only shows or hides ratio sections; every module always runs, so industry, market, rating and observations never depend on it.
+- Gaps are filled where the data allows: interest paid stands in for interest expense (and operating income is derived from pre-tax income plus interest) only when the standard tags are absent; a negative industry average is compared in percentage points; a total-market average is shown next to every industry average; provider multiples fill in when the filing-based one cannot be computed. Some `n/a` remain legitimately (e.g. Apple does not tag interest expense, banks have no gross margin or current ratio, some telecoms and media companies report no cost of revenue).
+- Registrants that reorganized under a new CIK (e.g. ExxonMobil Holdings) may have no 10-K under the new CIK; the lookup says so, and you can upload the predecessor's filing.
 - Industry figures are annual aggregates from January 2026, not medians, on Damodaran definitions (e.g. pre-tax unadjusted operating margin, positive-EBITDA EV/EBITDA); US-listed firms only. They are not the same period as the filing.
 - Alpha Vantage's company-overview endpoint is premium-only, which is why ratios come from Finnhub.

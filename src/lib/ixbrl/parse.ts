@@ -24,6 +24,8 @@ const MONTHS = [
 export function toIsoDate(raw: string): string {
   const text = raw.trim()
   if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text
+  const us = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+  if (us) return `${us[3]}-${us[1].padStart(2, '0')}-${us[2].padStart(2, '0')}`
   const m = text.match(/^([A-Za-z]+)\.?\s+(\d{1,2}),?\s+(\d{4})$/)
   if (m) {
     const month = MONTHS.indexOf(m[1].toLowerCase())

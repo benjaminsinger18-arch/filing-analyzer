@@ -20,19 +20,28 @@ const metricOf = (r: ReturnType<typeof runModules>, id: string) => r.industry.me
 
 describe('compare', () => {
   it('flags Above/At/Below with a 10% tolerance', () => {
-    expect(compare(1.2, 1, 'higher', 'x').flag).toBe('Above')
-    expect(compare(1.05, 1, 'higher', 'x').flag).toBe('At')
-    expect(compare(0.8, 1, 'higher', 'x').flag).toBe('Below')
+    expect(compare(1.2, 1, 'higher', false).flag).toBe('Above')
+    expect(compare(1.05, 1, 'higher', false).flag).toBe('At')
+    expect(compare(0.8, 1, 'higher', false).flag).toBe('Below')
   })
   it('reads Favorable/Unfavorable by direction and Neutral for multiples', () => {
-    expect(compare(1.2, 1, 'higher', 'x').read).toBe('Favorable')
-    expect(compare(1.2, 1, 'lower', 'x').read).toBe('Unfavorable')
-    expect(compare(0.8, 1, 'lower', 'x').read).toBe('Favorable')
-    expect(compare(1.2, 1, 'neutral', 'x').read).toBe('Neutral')
-    expect(compare(1.02, 1, 'higher', 'x').read).toBe('On par')
+    expect(compare(1.2, 1, 'higher', false).read).toBe('Favorable')
+    expect(compare(1.2, 1, 'lower', false).read).toBe('Unfavorable')
+    expect(compare(0.8, 1, 'lower', false).read).toBe('Favorable')
+    expect(compare(1.2, 1, 'neutral', false).read).toBe('Neutral')
+    expect(compare(1.02, 1, 'higher', false).read).toBe('On par')
   })
-  it('refuses to compare against a non-positive industry value', () => {
-    expect(compare(0.1, -0.02, 'higher', 'x').flag).toBe('n/a')
+  it('compares percent metrics in percentage points when the benchmark is negative', () => {
+    const r = compare(1.18, -0.002, 'higher', true)
+    expect(r.deltaPct).toBeNull()
+    expect(r.deltaPts).toBeCloseTo(1.182)
+    expect(r).toMatchObject({ flag: 'Above', read: 'Favorable' })
+    expect(r.note).toMatch(/negative/)
+    expect(compare(-0.01, -0.02, 'higher', true).flag).toBe('At') // 1 point apart: within the 2-point floor
+  })
+  it('gives n/a with a reason for a non-positive multiple or a missing benchmark', () => {
+    expect(compare(20, -5, 'neutral', false)).toMatchObject({ flag: 'n/a', note: expect.stringMatching(/not meaningful/) })
+    expect(compare(20, null, 'neutral', false)).toMatchObject({ flag: 'n/a', note: 'No benchmark figure' })
   })
 })
 
@@ -50,13 +59,47 @@ describe('industry module', () => {
     expect(r.industry.metrics).toHaveLength(0)
     expect(r.industry.notes[0].text).toMatch(/Pick one/)
   })
-  it('marks multiples n/a without a price, then compares once a price is set', () => {
+  it('explains a missing company value with the specific reason, then compares once a price is set', () => {
     const noPrice = runModules({ ...fin(), industry })
     expect(metricOf(noPrice, 'ind-pe').compare).toBeUndefined()
+    expect(metricOf(noPrice, 'ind-pe').reason).toMatch(/share price/)
     const cheaper = { ...industry, values: { ...industry.values, pe: 10 } }
     const priced = runModules({ ...fin(), industry: cheaper, price: 30 })
     expect(metricOf(priced, 'ind-pe').compare).toMatchObject({ flag: 'Above', read: 'Neutral' }) // P/E 20 vs 10
     expect(metricOf(runModules({ ...fin(), industry, price: 30 }), 'ind-pe').compare?.read).toBe('On par') // 20 vs 20
+  })
+  it('shows percentage points instead of a blank row for a negative industry ROE', () => {
+    const negRoe = { ...industry, values: { ...industry.values, roe: -0.002 } }
+    const m = metricOf(runModules({ ...fin(), industry: negRoe }), 'ind-roe')
+    expect(m.compare?.flag).toBe('Above')
+    expect(m.compare?.deltaPts).toBeCloseTo(150 / 1100 + 0.002)
+    expect(m.compare?.deltaPct).toBeNull()
+  })
+  it('adds a total-market comparison column and uses it when the industry row has no figure', () => {
+    const withMarket: IndustryBenchmark = {
+      ...industry,
+      values: { ...industry.values, roe: null },
+      market: { name: 'Total Market (without financials)', firms: 4000, values: { roe: 0.1, grossMargin: 0.35 } },
+    }
+    const r = runModules({ ...fin(), industry: withMarket })
+    expect(metricOf(r, 'ind-roe').compare?.flag).toBe('n/a')
+    expect(metricOf(r, 'ind-roe').compare?.market).toMatchObject({ flag: 'Above', name: 'Total Market (without financials)' })
+    expect(metricOf(r, 'ind-gross-margin').compare?.market?.benchmark).toBe(0.35)
+  })
+  it('falls back to the provider multiple when the filing-based one is not computable', () => {
+    const market: MarketData = { ticker: 'TEST', price: 30, priceAsOf: null, source: 'test', ratios: { pe: 25 } }
+    // no price in the filing context, so P/E from the filing is n/a; the provider value fills in
+    const m = metricOf(runModules({ ...fin(), industry, market }), 'ind-pe')
+    expect(m.value).toBe(25)
+    expect(m.compare?.companySource).toBe('provider')
+  })
+  it('does not depend on any display toggle: industry, rating and notes are always computed', () => {
+    const r = runModules({ ...fin(), industry })
+    for (const id of ['profitability', 'liquidity', 'leverage', 'efficiency', 'growth', 'cashflow', 'scores', 'valuation', 'industry', 'market', 'rating', 'notes']) {
+      expect(r[id], id).toBeDefined()
+    }
+    expect(r.rating.rating?.used).toBe(5)
+    expect(metricOf(r, 'ind-operating-margin').value).toBeCloseTo(0.2)
   })
 })
 
@@ -69,6 +112,16 @@ describe('market module', () => {
     expect(pe.inputs.find((i) => i.label === 'Computed from filing')?.value).toBeCloseTo(20)
     expect(r.market.notes.some((n) => /provider 40\.0x vs 20\.0x/.test(n.text))).toBe(true)
     expect(r.market.metrics.find((m) => m.id === 'mkt-beta')).toBeDefined()
+  })
+  it('computes filing-based counterparts for market cap and dividend yield', () => {
+    const html = buildFixture().replace('</body>', '<ix:nonFraction name="us-gaap:PaymentsOfDividends" contextRef="FY24" unitRef="usd" decimals="-6" scale="6">20</ix:nonFraction></body>')
+    const f = normalize(parseIxbrl(html))
+    const r = runModules({ ...f, price: 30, market })
+    const mcap = r.valuation.metrics.find((m) => m.id === 'mcap')!.value!
+    expect(r.valuation.metrics.find((m) => m.id === 'div-yield')!.value).toBeCloseTo((20 * 1e6) / mcap)
+    const rm = runModules({ ...f, price: 30, market: { ...market, ratios: { marketCap: 3e9, dividendYield: 0.02 } } })
+    expect(rm.market.metrics.find((m) => m.id === 'mkt-cap')!.inputs.some((i) => i.label === 'Computed from filing')).toBe(true)
+    expect(rm.market.metrics.find((m) => m.id === 'mkt-dividend-yield')!.inputs.some((i) => i.label === 'Computed from filing')).toBe(true)
   })
   it('shows the provider note when ratios are unavailable', () => {
     const r = runModules({ ...fin(), market: { ...market, ratios: {}, ratiosNote: 'Set FINNHUB_API_KEY' } })

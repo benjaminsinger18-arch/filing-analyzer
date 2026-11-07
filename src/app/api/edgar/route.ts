@@ -22,7 +22,11 @@ export async function GET(req: Request) {
     const form = searchParams.get('form') === '10-Q' ? ['10-Q'] : searchParams.get('form') === '10-K' ? ['10-K'] : ['10-K', '10-Q']
     const { cik, name } = await lookupCik(ticker)
     const filings = await latestFilings(cik, form)
-    return NextResponse.json({ cik, name, filings })
+    const wanted = form.join('/')
+    const note = filings.length
+      ? undefined
+      : `No ${wanted} filings under ${name}. The company may have reorganized under a new registrant (try the other form, or upload the filing).`
+    return NextResponse.json({ cik, name, filings, note })
   } catch (e) {
     if (e instanceof EdgarError) return NextResponse.json({ error: e.message }, { status: e.status })
     if (e instanceof NotIxbrlError) return NextResponse.json({ error: e.message }, { status: 422 })

@@ -1,4 +1,5 @@
-import type { AnalysisModule, Comparison, Metric, ModuleResult, Note, Unit } from './types'
+import type { AnalysisModule, CompareResult, Metric, ModuleResult, Note, Unit } from './types'
+import type { MarketRatios } from '@/lib/financials'
 
 type Direction = 'higher' | 'lower' | 'neutral'
 
@@ -6,43 +7,67 @@ type Spec = {
   id: string
   label: string
   unit: Unit
-  /** Metric id in the earlier modules, or a function building the company value. */
+  /** Metric id in the earlier modules (or 'debt-capital', built here). */
   source: string
   /** Key in the Damodaran industry row. */
   key: string
   direction: Direction
   formula: string
+  /** Provider ratio to use when the filing-based value cannot be computed. */
+  provider?: keyof MarketRatios
 }
 
 const SPECS: Spec[] = [
-  { id: 'ind-gross-margin', label: 'Gross margin', unit: '%', source: 'gross-margin', key: 'grossMargin', direction: 'higher', formula: 'Company vs. industry gross margin' },
+  { id: 'ind-gross-margin', label: 'Gross margin', unit: '%', source: 'gross-margin', key: 'grossMargin', direction: 'higher', formula: 'Gross profit / revenue' },
   { id: 'ind-operating-margin', label: 'Operating margin', unit: '%', source: 'operating-margin', key: 'operatingMargin', direction: 'higher', formula: 'Pre-tax unadjusted operating margin' },
-  { id: 'ind-net-margin', label: 'Net margin', unit: '%', source: 'net-margin', key: 'netMargin', direction: 'higher', formula: 'Company vs. industry net margin' },
+  { id: 'ind-net-margin', label: 'Net margin', unit: '%', source: 'net-margin', key: 'netMargin', direction: 'higher', formula: 'Net income / revenue' },
   { id: 'ind-roe', label: 'Return on equity', unit: '%', source: 'roe', key: 'roe', direction: 'higher', formula: 'Net income / equity (unadjusted)' },
   { id: 'ind-debt-capital', label: 'Debt / capital (book)', unit: '%', source: 'debt-capital', key: 'bookDebtToCapital', direction: 'lower', formula: 'Debt / (debt + equity), book values' },
   { id: 'ind-interest-coverage', label: 'Interest coverage', unit: 'x', source: 'interest-coverage', key: 'interestCoverage', direction: 'higher', formula: 'Operating income / interest expense' },
   { id: 'ind-debt-ebitda', label: 'Debt / EBITDA', unit: 'x', source: 'debt-ebitda', key: 'debtToEbitda', direction: 'lower', formula: 'Total debt / EBITDA' },
-  { id: 'ind-pe', label: 'P/E', unit: 'x', source: 'pe', key: 'pe', direction: 'neutral', formula: 'Price / diluted EPS vs. industry current P/E' },
-  { id: 'ind-pb', label: 'P/B', unit: 'x', source: 'pb', key: 'pb', direction: 'neutral', formula: "Market cap / equity vs. industry price-to-book" },
-  { id: 'ind-ev-ebitda', label: 'EV / EBITDA', unit: 'x', source: 'ev-ebitda', key: 'evEbitda', direction: 'neutral', formula: 'Positive-EBITDA firms only' },
-  { id: 'ind-ev-sales', label: 'EV / sales', unit: 'x', source: 'ev-sales', key: 'evSales', direction: 'neutral', formula: 'Enterprise value / revenue' },
+  { id: 'ind-pe', label: 'P/E', unit: 'x', source: 'pe', key: 'pe', direction: 'neutral', formula: 'Price / diluted EPS vs. industry current P/E', provider: 'pe' },
+  { id: 'ind-pb', label: 'P/B', unit: 'x', source: 'pb', key: 'pb', direction: 'neutral', formula: 'Market cap / equity', provider: 'pb' },
+  { id: 'ind-ev-ebitda', label: 'EV / EBITDA', unit: 'x', source: 'ev-ebitda', key: 'evEbitda', direction: 'neutral', formula: 'Positive-EBITDA firms only', provider: 'evEbitda' },
+  { id: 'ind-ev-sales', label: 'EV / sales', unit: 'x', source: 'ev-sales', key: 'evSales', direction: 'neutral', formula: 'Enterprise value / revenue', provider: 'evRevenue' },
 ]
 
 const TOLERANCE = 0.1
+/** For percent metrics against a non-positive benchmark: flag by points, at least this many. */
+const MIN_POINTS = 0.02
 
-export function compare(company: number, industry: number, direction: Direction, name: string): Comparison {
-  if (industry <= 0) return { industry, industryName: name, deltaPct: null, flag: 'n/a', read: 'n/a' }
-  const index = company / industry
-  const flag = Math.abs(index - 1) <= TOLERANCE ? 'At' : index > 1 ? 'Above' : 'Below'
-  const read =
+/**
+ * Compares a company value with a benchmark. Never returns a blank row for a usable benchmark:
+ * - positive benchmark: relative difference with a +/-10% band
+ * - non-positive benchmark on a percent metric: difference in percentage points
+ * - non-positive benchmark on a multiple: n/a with a reason
+ */
+export function compare(company: number, benchmark: number | null, direction: Direction, isPct: boolean): CompareResult {
+  if (benchmark === null || benchmark === undefined) {
+    return { benchmark: NaN, deltaPct: null, deltaPts: null, flag: 'n/a', read: 'n/a', note: 'No benchmark figure' }
+  }
+  const deltaPts = isPct ? company - benchmark : null
+  let flag: CompareResult['flag']
+  let deltaPct: number | null = null
+  let note: string | undefined
+  if (benchmark > 0) {
+    deltaPct = company / benchmark - 1
+    flag = Math.abs(deltaPct) <= TOLERANCE ? 'At' : deltaPct > 0 ? 'Above' : 'Below'
+  } else if (isPct) {
+    const band = Math.max(MIN_POINTS, TOLERANCE * Math.abs(benchmark))
+    flag = Math.abs(deltaPts!) <= band ? 'At' : deltaPts! > 0 ? 'Above' : 'Below'
+    note = 'Benchmark is negative; compared in percentage points'
+  } else {
+    return { benchmark, deltaPct: null, deltaPts: null, flag: 'n/a', read: 'n/a', note: 'Benchmark not meaningful (non-positive)' }
+  }
+  const read: CompareResult['read'] =
     flag === 'At' ? 'On par' : direction === 'neutral' ? 'Neutral' : (flag === 'Above') === (direction === 'higher') ? 'Favorable' : 'Unfavorable'
-  return { industry, industryName: name, deltaPct: index - 1, flag, read }
+  return { benchmark, deltaPct, deltaPts, flag, read, note }
 }
 
 export const industry: AnalysisModule = {
   id: 'industry',
   title: 'Industry comparison',
-  description: 'Company vs. Damodaran US industry averages.',
+  description: 'Company vs. Damodaran US industry and market averages.',
   requires: [],
   run(fin, prior) {
     const ind = fin.industry
@@ -55,19 +80,48 @@ export const industry: AnalysisModule = {
       }
     }
     const all = Object.values(prior).flatMap((r: ModuleResult) => r.metrics)
-    const val = (id: string) => all.find((m) => m.id === id)?.value ?? null
+    const find = (id: string) => all.find((m) => m.id === id)
     // Debt / capital is not a standalone metric elsewhere; build it from the balance sheet.
     const debt = fin.bsCur.debt?.value
     const equity = fin.bsCur.equity?.value
     const debtCapital = debt !== undefined && equity !== undefined && debt + equity > 0 ? debt / (debt + equity) : null
 
     const metrics: Metric[] = SPECS.map((s) => {
-      const company = s.source === 'debt-capital' ? debtCapital : val(s.source)
-      const benchmark = ind.values[s.key]
-      const base = { id: s.id, label: s.label, unit: s.unit, formula: s.formula, inputs: [] }
-      if (benchmark === null || benchmark === undefined) return { ...base, value: company, reason: 'No industry figure' }
-      if (company === null) return { ...base, value: null, reason: 'Company value n/a (see ratios)' }
-      return { ...base, value: company, compare: compare(company, benchmark, s.direction, ind.name) }
+      let company: number | null
+      let missingWhy: string | undefined
+      if (s.source === 'debt-capital') {
+        company = debtCapital
+        missingWhy = 'Not reported: debt or equity'
+      } else {
+        const m = find(s.source)
+        company = m?.value ?? null
+        missingWhy = m?.reason ?? (s.provider && !fin.price ? 'Needs a share price (click Fetch latest)' : undefined)
+      }
+      let companySource: string | undefined
+      if (company === null && s.provider) {
+        const p = fin.market?.ratios[s.provider]
+        if (p !== undefined) {
+          company = p
+          companySource = 'provider'
+        }
+      }
+      const base = { id: s.id, label: s.label, unit: s.unit, formula: s.formula, inputs: [] as Metric['inputs'] }
+      if (company === null) {
+        return { ...base, value: null, reason: missingWhy ?? 'Company value not available' }
+      }
+      const isPct = s.unit === '%'
+      const own = compare(company, ind.values[s.key] ?? null, s.direction, isPct)
+      const mk = ind.market ? compare(company, ind.market.values[s.key] ?? null, s.direction, isPct) : undefined
+      return {
+        ...base,
+        value: company,
+        compare: {
+          ...own,
+          industryName: ind.name,
+          companySource,
+          market: mk && ind.market ? { ...mk, name: ind.market.name } : undefined,
+        },
+      }
     })
 
     const directional = metrics.filter((m) => m.compare && m.compare.read !== 'Neutral' && m.compare.read !== 'n/a')
@@ -82,7 +136,7 @@ export const industry: AnalysisModule = {
       },
     ]
     if (/bank|insurance|brokerage|financial/i.test(ind.name)) {
-      notes.push({ tone: 'info', text: 'Financial-sector filing: margin and EBITDA comparisons may not apply.' })
+      notes.push({ tone: 'info', text: 'Financial-sector filing: margin, coverage and EBITDA comparisons may not apply.' })
     }
     return { id: 'industry', title: 'Industry comparison', metrics, notes }
   },
