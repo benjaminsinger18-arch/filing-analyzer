@@ -88,6 +88,32 @@ describe('modules', () => {
     expect(f.ytd.da?.tag).toBe('ext:DepreciationAmortizationAndOther')
   })
 
+  it('derives operating income from pre-tax income plus interest when it is not reported', () => {
+    const html = buildFixture()
+      .replace('us-gaap:OperatingIncomeLoss', 'us-gaap:SomethingElse')
+      .replace('</body>', '<ix:nonFraction name="us-gaap:IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest" contextRef="FY24" unitRef="usd" decimals="-6" scale="6">190</ix:nonFraction></body>')
+    const f = normalize(parseIxbrl(html))
+    expect(f.cur.operatingIncome?.value).toBe(200 * M) // 190 pre-tax + 10 interest
+    expect(f.cur.operatingIncome?.tag).toMatch(/derived/)
+  })
+
+  it('falls back to interest paid for interest expense and sums debt components', () => {
+    const html = buildFixture()
+      .replace('us-gaap:InterestExpense"', 'us-gaap:InterestPaidNet"')
+      .replace('us-gaap:LongTermDebtNoncurrent', 'us-gaap:LongTermDebtAndCapitalLeaseObligations')
+      .replace('</body>', '<ix:nonFraction name="us-gaap:CommercialPaper" contextRef="E24" unitRef="usd" decimals="-6" scale="6">50</ix:nonFraction></body>')
+    const f = normalize(parseIxbrl(html))
+    expect(f.cur.interestExpense?.tag).toBe('InterestPaidNet')
+    expect(f.bsCur.debt?.value).toBe(450 * M)
+    expect(f.bsCur.debt?.tag).toBe('LongTermDebtAndCapitalLeaseObligations + CommercialPaper')
+  })
+
+  it('reads M/D/YYYY cover dates', () => {
+    expect(toIsoDate('9/27/2025')).toBe('2025-09-27')
+    const html = buildFixture().replace('December 31, 2024', '12/31/2024')
+    expect(normalize(parseIxbrl(html)).meta.periodEnd).toBe('2024-12-31')
+  })
+
   it('computes Altman Z-double-prime', () => {
     const z = 6.56 * (400 / 2000) + 3.26 * (500 / 2000) + 6.72 * (200 / 2000) + 1.05 * (1100 / 900)
     expect(val('altman').value).toBeCloseTo(z)

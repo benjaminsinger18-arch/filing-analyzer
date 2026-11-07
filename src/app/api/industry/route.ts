@@ -11,7 +11,15 @@ function build(name: string): IndustryBenchmark | null {
   const row = industries[name]
   if (!row) return null
   const { firms, ...values } = row
-  return { name, asOf: benchmarks.asOf, firms, values }
+  const financial = /bank|insurance|brokerage|investments|reinsurance|financial|r\.e\.i\.t|real estate/i.test(name)
+  const marketName = financial ? 'Total Market' : 'Total Market (without financials)'
+  const m = industries[marketName]
+  let market: IndustryBenchmark['market']
+  if (m) {
+    const { firms: mFirms, ...mValues } = m
+    market = { name: marketName, firms: mFirms, values: mValues }
+  }
+  return { name, asOf: benchmarks.asOf, firms, values, market }
 }
 
 /**

@@ -32,10 +32,13 @@ export const RATIO_MODULES: AnalysisModule[] = [
 export const SUMMARY_MODULES: AnalysisModule[] = [rating, notes]
 export const ALL_MODULES = [...RATIO_MODULES, ...SUMMARY_MODULES]
 
-export function runModules(fin: Financials, enabled?: Set<string>): Record<string, ModuleResult> {
+/**
+ * Runs every module. Industry, market, rating and observations read the other modules' results, so
+ * nothing is skipped; the UI's module toggles only control which ratio sections are displayed.
+ */
+export function runModules(fin: Financials): Record<string, ModuleResult> {
   const results: Record<string, ModuleResult> = {}
   for (const mod of RATIO_MODULES) {
-    if (enabled && !enabled.has(mod.id)) continue
     results[mod.id] = mod.run(fin, results)
   }
   for (const mod of SUMMARY_MODULES) {

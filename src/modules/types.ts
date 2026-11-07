@@ -19,12 +19,24 @@ export type Metric = {
   compare?: Comparison
 }
 
-export type Comparison = {
-  industry: number
-  industryName: string
+export type CompareResult = {
+  benchmark: number
+  /** Relative difference (company / benchmark - 1); null when the benchmark is not positive. */
   deltaPct: number | null
+  /** Difference in percentage points, for percent metrics. */
+  deltaPts: number | null
   flag: 'Above' | 'At' | 'Below' | 'n/a'
   read: 'Favorable' | 'Unfavorable' | 'On par' | 'Neutral' | 'n/a'
+  /** Why no comparison could be made, or a caveat (e.g. negative industry average). */
+  note?: string
+}
+
+export type Comparison = CompareResult & {
+  industryName: string
+  /** Same comparison against the broad market row. */
+  market?: CompareResult & { name: string }
+  /** Where the company value came from when not computed from the filing. */
+  companySource?: string
 }
 
 export type Note = { tone: 'good' | 'watch' | 'info'; text: string }

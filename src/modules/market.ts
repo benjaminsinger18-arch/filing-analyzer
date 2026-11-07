@@ -11,8 +11,8 @@ const ROWS: Row[] = [
   { id: 'mkt-ev-revenue', label: 'EV / revenue (provider)', unit: 'x', key: 'evRevenue', ours: 'ev-sales' },
   { id: 'mkt-pb', label: 'P/B (provider)', unit: 'x', key: 'pb', ours: 'pb' },
   { id: 'mkt-beta', label: 'Beta', unit: 'x', key: 'beta' },
-  { id: 'mkt-dividend-yield', label: 'Dividend yield', unit: '%', key: 'dividendYield' },
-  { id: 'mkt-cap', label: 'Market cap (provider)', unit: 'usd', key: 'marketCap' },
+  { id: 'mkt-dividend-yield', label: 'Dividend yield', unit: '%', key: 'dividendYield', ours: 'div-yield' },
+  { id: 'mkt-cap', label: 'Market cap (provider)', unit: 'usd', key: 'marketCap', ours: 'mcap' },
 ]
 
 /** Provider-reported market ratios, each beside the ratio computed from the filing where one exists. */
@@ -48,7 +48,7 @@ export const market: AnalysisModule = {
         label: row.label,
         unit: row.unit,
         value: provider,
-        formula: computed !== null ? `Filing-based: ${computed.toFixed(2)}x` : 'Provider-reported',
+        formula: computed !== null ? 'Provider vs. filing-based' : 'Provider only',
         inputs,
       })
       if (computed !== null && computed > 0 && Math.abs(provider / computed - 1) > 0.25) {

@@ -29,6 +29,9 @@ export const valuation: AnalysisModule = {
       mcap && fin.bsCur.debt && fin.bsCur.cash
         ? { value: mcap.value + fin.bsCur.debt.value - fin.bsCur.cash.value, tag: 'market cap + debt - cash' }
         : undefined
+    const divYield = metric('div-yield', 'Dividend yield', '%', 'Dividends paid / Market cap',
+      { 'Dividends paid': annual ? fin.ytd.dividends : undefined, 'Market cap': mcap }, (v) => (v['Market cap'] <= 0 ? null : v['Dividends paid'] / v['Market cap']))
+    if (!annual) divYield.reason = 'Annual filings only'
     const evMetric = metric('ev-ebitda', 'EV / EBITDA', 'x', 'Enterprise value / (Operating income + D&A)',
       { 'Enterprise value': ev, EBITDA: ebitda }, (v) => (v.EBITDA <= 0 ? null : v['Enterprise value'] / v.EBITDA))
     if (!annual) evMetric.reason = 'Annual filings only'
@@ -47,6 +50,7 @@ export const valuation: AnalysisModule = {
         evMetric,
         metric('ev-sales', 'EV / sales', 'x', `Enterprise value / Revenue${fin.basis === 'quarter' ? ' (quarter x4)' : ''}`,
           { 'Enterprise value': ev, Revenue: fin.cur.revenue }, (v) => (v.Revenue <= 0 ? null : v['Enterprise value'] / (v.Revenue * f))),
+        divYield,
         metric('fcf-yield', 'FCF yield', '%', 'Free cash flow / Market cap',
           { 'Free cash flow': fin.ytd.ocf && fin.ytd.capex ? { value: fin.ytd.ocf.value - fin.ytd.capex.value, tag: 'OCF - capex' } : undefined, 'Market cap': mcap },
           (v) => div(v['Free cash flow'], v['Market cap'])),

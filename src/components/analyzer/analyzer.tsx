@@ -262,14 +262,25 @@ const readTone: Record<string, string> = {
   'n/a': 'text-(--muted)',
 }
 
+function deltaText(c: { deltaPct: number | null; deltaPts: number | null }) {
+  if (c.deltaPct !== null) return `${c.deltaPct >= 0 ? '+' : ''}${(c.deltaPct * 100).toFixed(0)}%`
+  if (c.deltaPts !== null) return `${c.deltaPts >= 0 ? '+' : ''}${(c.deltaPts * 100).toFixed(1)} pts`
+  return '-'
+}
+
+const deltaTone = (c: { deltaPct: number | null; deltaPts: number | null }) => {
+  const d = c.deltaPct ?? c.deltaPts
+  return d === null ? 'text-(--muted)' : d >= 0 ? 'text-(--up)' : 'text-(--down)'
+}
+
 function IndustryTable({ result }: { result?: ModuleResult }) {
-  if (!result) return <p className="p-4 text-xs text-(--muted)">Enable the Industry module.</p>
+  if (!result) return <p className="p-4 text-xs text-(--muted)">No data.</p>
   const fmt = (m: Metric, v: number) => formatMetric({ ...m, value: v })
   return (
     <div className="flex flex-col">
       {result.metrics.length ? (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-150 text-left">
+          <table className="w-full min-w-190 text-left">
             <thead>
               <tr className="border-b border-(--line) text-[11px] text-(--muted)">
                 <th className="px-3 py-1.5 font-medium">Metric</th>
@@ -278,21 +289,31 @@ function IndustryTable({ result }: { result?: ModuleResult }) {
                 <th className="px-3 py-1.5 text-right font-medium">vs. industry</th>
                 <th className="px-3 py-1.5 font-medium">Flag</th>
                 <th className="px-3 py-1.5 font-medium">Read</th>
+                <th className="px-3 py-1.5 text-right font-medium">Market avg</th>
+                <th className="px-3 py-1.5 text-right font-medium">vs. market</th>
               </tr>
             </thead>
             <tbody>
               {result.metrics.map((m) => {
                 const c = m.compare
+                const mk = c?.market
+                const usable = c && c.flag !== 'n/a'
                 return (
                   <tr key={m.id} className="border-b border-(--line)">
                     <td className="px-3 py-1.5 font-medium">{m.label}</td>
-                    <td className="num px-3 py-1.5 text-right">{m.value === null ? 'n/a' : fmt(m, m.value)}</td>
-                    <td className="num px-3 py-1.5 text-right">{c ? fmt(m, c.industry) : '-'}</td>
-                    <td className={cn('num px-3 py-1.5 text-right', c?.deltaPct == null ? 'text-(--muted)' : c.deltaPct >= 0 ? 'text-(--up)' : 'text-(--down)')}>
-                      {c?.deltaPct == null ? '-' : `${c.deltaPct >= 0 ? '+' : ''}${(c.deltaPct * 100).toFixed(0)}%`}
+                    <td className="num px-3 py-1.5 text-right">
+                      {m.value === null ? <span className="text-(--muted)">n/a</span> : fmt(m, m.value)}
+                      {c?.companySource ? <span className="ml-1 text-[10px] text-(--muted)">({c.companySource})</span> : null}
                     </td>
-                    <td className="px-3 py-1.5">{c ? c.flag : <span className="text-(--muted)">{m.reason}</span>}</td>
-                    <td className={cn('px-3 py-1.5', c ? readTone[c.read] : '')}>{c ? c.read : ''}</td>
+                    <td className="num px-3 py-1.5 text-right">{c && !Number.isNaN(c.benchmark) ? fmt(m, c.benchmark) : '-'}</td>
+                    <td className={cn('num px-3 py-1.5 text-right', c ? deltaTone(c) : 'text-(--muted)')}>{c ? deltaText(c) : '-'}</td>
+                    <td className="px-3 py-1.5">
+                      {usable ? c.flag : <span className="text-(--muted)">{c ? c.note : m.reason}</span>}
+                      {usable && c.note ? <span className="ml-1 text-[10px] text-(--muted)" title={c.note}>*</span> : null}
+                    </td>
+                    <td className={cn('px-3 py-1.5', usable ? readTone[c.read] : '')}>{usable ? c.read : ''}</td>
+                    <td className="num px-3 py-1.5 text-right text-(--muted)">{mk && !Number.isNaN(mk.benchmark) ? fmt(m, mk.benchmark) : '-'}</td>
+                    <td className={cn('num px-3 py-1.5 text-right', mk ? deltaTone(mk) : 'text-(--muted)')}>{mk && mk.flag !== 'n/a' ? deltaText(mk) : '-'}</td>
                   </tr>
                 )
               })}
@@ -302,14 +323,14 @@ function IndustryTable({ result }: { result?: ModuleResult }) {
       ) : null}
       <ul>{result.notes.map((n, i) => <NoteRow key={i} n={n} />)}</ul>
       <p className="px-3 py-2 text-[11px] text-(--muted)">
-        Damodaran US industry aggregates (not medians), Jan 2026; definitions differ slightly from this app. Flag: Above/Below outside +/-10%. Valuation multiples are Above/Below only.
+        Damodaran US aggregates (not medians), Jan 2026; definitions differ slightly. Flag: Above/Below outside +/-10% (percentage points when the average is negative, marked *). Multiples are Above/Below only. Market avg: total US market (ex-financials unless a financial industry).
       </p>
     </div>
   )
 }
 
 function MarketTable({ result }: { result?: ModuleResult }) {
-  if (!result) return <p className="p-4 text-xs text-(--muted)">Enable the Market module.</p>
+  if (!result) return <p className="p-4 text-xs text-(--muted)">No data.</p>
   return (
     <div className="flex flex-col">
       {result.metrics.length ? (
@@ -328,7 +349,7 @@ function MarketTable({ result }: { result?: ModuleResult }) {
                 <tr key={m.id} className="border-b border-(--line)">
                   <td className="px-3 py-1.5 font-medium">{m.label}</td>
                   <td className="num px-3 py-1.5 text-right">{formatMetric(m)}</td>
-                  <td className="num px-3 py-1.5 text-right text-(--muted)">{ours ? `${ours.value.toFixed(2)}x` : '-'}</td>
+                  <td className="num px-3 py-1.5 text-right text-(--muted)">{ours ? formatMetric({ ...m, value: ours.value }) : 'provider only'}</td>
                 </tr>
               )
             })}
@@ -404,8 +425,8 @@ export function Analyzer() {
   const results = useMemo(() => {
     if (!fin) return null
     const p = Number(price)
-    return runModules({ ...fin, price: p > 0 ? p : undefined, priceAsOf: market?.priceAsOf ?? undefined, market: market ?? undefined, industry: industry ?? undefined }, enabled)
-  }, [fin, price, market, industry, enabled])
+    return runModules({ ...fin, price: p > 0 ? p : undefined, priceAsOf: market?.priceAsOf ?? undefined, market: market ?? undefined, industry: industry ?? undefined })
+  }, [fin, price, market, industry])
 
   async function loadIndustry(params: string) {
     try {
@@ -464,7 +485,7 @@ export function Analyzer() {
       const body = await res.json()
       if (!res.ok) throw new Error(body.error ?? 'Lookup failed.')
       setFilings([...(body.filings as FilingRef[])].sort((a, b) => b.reportDate.localeCompare(a.reportDate)))
-      if (!body.filings.length) setError(`No ${formType} filings found for ${ticker.toUpperCase()}.`)
+      if (!body.filings.length) setError(body.note ?? `No ${formType} filings found for ${ticker.toUpperCase()}.`)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Lookup failed.')
     } finally {
@@ -506,11 +527,11 @@ export function Analyzer() {
 
   const rating = results?.rating?.rating
   const allMetrics = results
-    ? RATIO_MODULES.filter((m) => results[m.id] && m.id !== 'industry' && m.id !== 'market').flatMap((m) => results[m.id].metrics.map((metric) => ({ moduleTitle: m.title, m: metric })))
+    ? RATIO_MODULES.filter((m) => results[m.id] && enabled.has(m.id) && m.id !== 'industry' && m.id !== 'market').flatMap((m) => results[m.id].metrics.map((metric) => ({ moduleTitle: m.title, m: metric })))
     : []
   const book = allMetrics.filter(({ m }) => m.value !== null)
   const ratingOf = (f: Financials) => {
-    const r = runModules(f, enabled).rating?.rating
+    const r = runModules(f).rating?.rating
     return r?.composite == null ? null : Math.round(r.composite)
   }
 
@@ -531,7 +552,7 @@ export function Analyzer() {
         <div className="flex items-center gap-2">
           <details className="relative">
             <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded px-2 py-1 text-xs text-(--muted) hover:text-(--fg)">
-              <SlidersHorizontal className="size-3.5" /> Modules
+              <SlidersHorizontal className="size-3.5" /> Show / hide
             </summary>
             <div className="absolute right-0 z-20 mt-1 flex w-72 flex-col gap-0.5 rounded-md border border-(--line) bg-(--panel) p-2 shadow-xl">
               <button type="button" onClick={enableAllModules} className="mb-1 self-end rounded px-2 py-0.5 text-[11px] text-(--accent) hover:bg-(--panel-2)">Enable all</button>

@@ -12,6 +12,7 @@ export type LineItem =
   | 'ocf'
   | 'capex'
   | 'dilutedShares'
+  | 'dividends'
   | 'assets'
   | 'currentAssets'
   | 'cash'
@@ -55,6 +56,8 @@ export type IndustryBenchmark = {
   asOf: string
   firms: number
   values: Record<string, number | null>
+  /** Broad-market row (Damodaran total market) used as a second benchmark and as a fallback. */
+  market?: { name: string; firms: number; values: Record<string, number | null> }
 }
 
 /** A value with the XBRL tag it came from, for the audit trail. */
@@ -108,6 +111,7 @@ export const LINE_ITEM_LABELS: Record<LineItem, string> = {
   ocf: 'Operating cash flow',
   capex: 'Capital expenditures',
   dilutedShares: 'Diluted weighted shares',
+  dividends: 'Dividends paid',
   assets: 'Total assets',
   currentAssets: 'Current assets',
   cash: 'Cash & equivalents',
