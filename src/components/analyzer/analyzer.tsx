@@ -684,48 +684,6 @@ export function Analyzer() {
 
         {/* Center: header, chart, loader, tables */}
         <div className="flex min-h-0 flex-col gap-2 lg:overflow-y-auto">
-          <Panel
-            title={fin ? `${fin.meta.ticker ?? ''} ${fin.meta.name}`.trim() : 'No filing loaded'}
-            right={
-              fin ? (
-                <div className="flex items-center gap-2 text-[11px] text-(--muted)">
-                  <Chip className="bg-(--panel-2) text-(--fg)">{fin.meta.form}{fin.meta.fiscalPeriod ? ` ${fin.meta.fiscalPeriod}` : ''}</Chip>
-                  <span className="num">period end {fin.meta.periodEnd}</span>
-                  <select
-                    value=""
-                    onChange={(e) => e.target.value && void loadIndustry(`name=${encodeURIComponent(e.target.value)}`)}
-                    aria-label="Industry"
-                    className="h-6 max-w-44 px-1 text-[11px]"
-                  >
-                    <option value="">{industry ? industry.name : 'Pick industry'}</option>
-                    {industryOptions.map((o) => (
-                      <option key={o} value={o}>{o}</option>
-                    ))}
-                  </select>
-                  {fin.meta.sourceUrl ? <a className="text-(--accent) underline" href={fin.meta.sourceUrl} target="_blank" rel="noreferrer">filing</a> : null}
-                </div>
-              ) : null
-            }
-            className="min-h-96 flex-1"
-          >
-            {fin ? (
-              <>
-                <StatStrip fin={fin} />
-                <div className="flex items-center gap-1 border-b border-(--line) px-2 py-1.5">
-                  {(Object.keys(CHART_ITEMS) as ChartTab[]).map((t) => (
-                    <Tab key={t} active={chartTab === t} onClick={() => setChartTab(t)}>{CHART_ITEMS[t].label}</Tab>
-                  ))}
-                  <span className="ml-auto text-[11px] text-(--muted)">
-                    {fin.basis === 'quarter' ? 'Quarter vs. prior-year quarter · cash flow YTD' : 'FY vs. prior FY'}
-                  </span>
-                </div>
-                <FundamentalsChart fin={fin} tab={chartTab} />
-              </>
-            ) : (
-              <p className="flex flex-1 items-center justify-center px-4 py-16 text-center text-sm text-(--muted)">Load a filing below.</p>
-            )}
-          </Panel>
-
           <Panel title="Load filing" className="shrink-0">
             <div className="grid grid-cols-1 gap-3 p-3 md:grid-cols-2">
               <div className="flex flex-col gap-2">
@@ -840,6 +798,48 @@ export function Analyzer() {
             </div>
             {loading ? <p className="px-3 pb-3 text-xs text-(--muted)">Working...</p> : null}
             {error ? <p className="mx-3 mb-3 rounded bg-(--down-bg) px-3 py-2 text-xs text-(--down)">{error}</p> : null}
+          </Panel>
+
+          <Panel
+            title={fin ? `${fin.meta.ticker ?? ''} ${fin.meta.name}`.trim() : 'No filing loaded'}
+            right={
+              fin ? (
+                <div className="flex items-center gap-2 text-[11px] text-(--muted)">
+                  <Chip className="bg-(--panel-2) text-(--fg)">{fin.meta.form}{fin.meta.fiscalPeriod ? ` ${fin.meta.fiscalPeriod}` : ''}</Chip>
+                  <span className="num">period end {fin.meta.periodEnd}</span>
+                  <select
+                    value=""
+                    onChange={(e) => e.target.value && void loadIndustry(`name=${encodeURIComponent(e.target.value)}`)}
+                    aria-label="Industry"
+                    className="h-6 max-w-44 px-1 text-[11px]"
+                  >
+                    <option value="">{industry ? industry.name : 'Pick industry'}</option>
+                    {industryOptions.map((o) => (
+                      <option key={o} value={o}>{o}</option>
+                    ))}
+                  </select>
+                  {fin.meta.sourceUrl ? <a className="text-(--accent) underline" href={fin.meta.sourceUrl} target="_blank" rel="noreferrer">filing</a> : null}
+                </div>
+              ) : null
+            }
+            className="min-h-96 flex-1"
+          >
+            {fin ? (
+              <>
+                <StatStrip fin={fin} />
+                <div className="flex items-center gap-1 border-b border-(--line) px-2 py-1.5">
+                  {(Object.keys(CHART_ITEMS) as ChartTab[]).map((t) => (
+                    <Tab key={t} active={chartTab === t} onClick={() => setChartTab(t)}>{CHART_ITEMS[t].label}</Tab>
+                  ))}
+                  <span className="ml-auto text-[11px] text-(--muted)">
+                    {fin.basis === 'quarter' ? 'Quarter vs. prior-year quarter · cash flow YTD' : 'FY vs. prior FY'}
+                  </span>
+                </div>
+                <FundamentalsChart fin={fin} tab={chartTab} />
+              </>
+            ) : (
+              <p className="flex flex-1 items-center justify-center px-4 py-16 text-center text-sm text-(--muted)">Load a filing above.</p>
+            )}
           </Panel>
 
         </div>

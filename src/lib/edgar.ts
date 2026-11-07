@@ -38,6 +38,19 @@ export async function companyList(): Promise<{ ticker: string; name: string; cik
   return Object.values(data).map((c) => ({ ticker: c.ticker, name: c.title, cik: String(c.cik_str).padStart(10, '0') }))
 }
 
+const periodicCache = new Map<string, { ok: boolean; at: number }>()
+const PERIODIC_TTL = 6 * 60 * 60 * 1000
+
+/** True when the registrant has filed a 10-K or 10-Q (the only forms this app analyzes). */
+export async function hasPeriodicFilings(cik: string): Promise<boolean> {
+  const hit = periodicCache.get(cik)
+  if (hit && Date.now() - hit.at < PERIODIC_TTL) return hit.ok
+  const sub = await getJson<{ filings: { recent: { form: string[] } } }>(`https://data.sec.gov/submissions/CIK${cik}.json`)
+  const ok = sub.filings.recent.form.some((f) => f === '10-K' || f === '10-Q')
+  periodicCache.set(cik, { ok, at: Date.now() })
+  return ok
+}
+
 export type FilingRef = { form: string; filingDate: string; accession: string; primaryDocument: string; reportDate: string; url: string }
 
 export async function latestFilings(cik: string, forms: string[], limit = 4): Promise<FilingRef[]> {
