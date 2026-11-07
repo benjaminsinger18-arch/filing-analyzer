@@ -82,6 +82,15 @@ describe('mapFinnhubMetrics', () => {
     const r = mapFinnhubMetrics({ peTTM: 30.5, pbQuarterly: 40, marketCapitalization: 3000000, dividendYieldIndicatedAnnual: 0.5, beta: 1.2 })
     expect(r).toEqual({ pe: 30.5, pb: 40, marketCap: 3e12, dividendYield: 0.005, beta: 1.2 })
   })
+  it('maps the field names Finnhub actually returns (checked live for AAPL)', () => {
+    const r = mapFinnhubMetrics({
+      peTTM: 37.8436, forwardPE: 35.75579, pegTTM: 3.06221, evEbitdaTTM: 29.4239, evRevenueTTM: 10.5376,
+      pbQuarterly: 44.0587, beta: 1.0839877, dividendYieldIndicatedAnnual: 0.50534, marketCapitalization: 5001977,
+    })
+    expect(r).toMatchObject({ pe: 37.8436, forwardPe: 35.75579, peg: 3.06221, evEbitda: 29.4239, evRevenue: 10.5376, pb: 44.0587, beta: 1.0839877 })
+    expect(r.dividendYield).toBeCloseTo(0.0050534)
+    expect(r.marketCap).toBe(5001977e6)
+  })
   it('drops missing or non-numeric values', () => {
     expect(mapFinnhubMetrics({ peTTM: null, beta: 'x' })).toEqual({})
   })
