@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import { Moon, Search, SlidersHorizontal, Sun, Upload } from 'lucide-react'
+import { Check, Moon, Search, SlidersHorizontal, Sun, Upload } from 'lucide-react'
 import './terminal.css'
 import { LINE_ITEM_LABELS, type Financials, type IndustryBenchmark, type Items, type LineItem, type MarketData } from '@/lib/financials'
 import { normalize, NotIxbrlError } from '@/lib/ixbrl/normalize'
@@ -10,6 +10,7 @@ import { isIxbrl, parseIxbrl } from '@/lib/ixbrl/parse'
 import { RATIO_MODULES, runModules } from '@/modules/registry'
 import { RUBRIC_TABLES, scoreMetric } from '@/modules/rating'
 import type { Metric, ModuleResult, Note, RatingResult } from '@/modules/types'
+import type { Company } from '@/lib/search'
 import { cn } from '@/lib/utils'
 import { Formula } from './formula'
 
@@ -37,8 +38,9 @@ export function formatMetric(m: Metric): string {
 const compactUsd = (v: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 2 }).format(v)
 
-const scoreTone = (s: number | null) => (s === null ? 'text-(--muted)' : s >= 60 ? 'text-(--up)' : s >= 45 ? 'text-(--warn)' : 'text-(--down)')
-const scoreDepth = (s: number) => (s >= 60 ? 'var(--depth-up)' : s >= 45 ? 'var(--warn-bg)' : 'var(--depth-down)')
+// Middle scores (45-59) are plain: neutral text and a gray bar, so only green and red carry meaning.
+const scoreTone = (s: number | null) => (s === null ? 'text-(--muted)' : s >= 60 ? 'text-(--up)' : s >= 45 ? 'text-(--fg)' : 'text-(--down)')
+const scoreDepth = (s: number) => (s >= 60 ? 'var(--depth-up)' : s >= 45 ? 'color-mix(in srgb, var(--muted) 25%, transparent)' : 'var(--depth-down)')
 const tierTone: Record<RatingResult['tier'], string> = {
   Strong: 'bg-(--up-bg) text-(--up)',
   Solid: 'bg-(--up-bg) text-(--up)',
@@ -380,6 +382,10 @@ export function Analyzer() {
   const [industryOptions, setIndustryOptions] = useState<string[]>([])
   const [priceNote, setPriceNote] = useState<string | null>(null)
   const [ticker, setTicker] = useState('')
+  const [symbol, setSymbol] = useState<string | null>(null)
+  const [suggest, setSuggest] = useState<Company[]>([])
+  const [suggestOpen, setSuggestOpen] = useState(false)
+  const [active, setActive] = useState(-1)
   const [formType, setFormType] = useState<'10-K' | '10-Q'>('10-K')
   const [filings, setFilings] = useState<FilingRef[] | null>(null)
   const [enabled, setEnabled] = useState<Set<string>>(new Set(RATIO_MODULES.map((m) => m.id)))
@@ -490,17 +496,55 @@ export function Analyzer() {
     }
   }
 
-  async function searchTicker() {
-    if (!ticker.trim()) return
+  // Debounced company search as the user types (partial names and tickers).
+  useEffect(() => {
+    const q = ticker.trim()
+    if (!q || symbol) return
+    let stale = false
+    const t = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`)
+        const body = await res.json()
+        if (!stale) {
+          setSuggest(body.results ?? [])
+          setActive(-1)
+        }
+      } catch {
+        if (!stale) setSuggest([])
+      }
+    }, 180)
+    return () => {
+      stale = true
+      clearTimeout(t)
+    }
+  }, [ticker, symbol])
+
+  function pick(c: Company) {
+    setTicker(c.ticker)
+    setSymbol(c.ticker)
+    setSuggestOpen(false)
+    void searchTicker(c.ticker)
+  }
+
+  /** Enter / FIND: take the highlighted or top suggestion unless the text is already an exact ticker. */
+  function submit() {
+    const s = suggest[active] ?? suggest[0]
+    if (s && suggestOpen && (active >= 0 || ticker.trim().toUpperCase() !== s.ticker)) return pick(s)
+    void searchTicker()
+  }
+
+  async function searchTicker(sym?: string) {
+    const t = (sym ?? ticker).trim()
+    if (!t) return
     setError(null)
     setLoading(true)
     setFilings(null)
     try {
-      const res = await fetch(`/api/edgar?ticker=${encodeURIComponent(ticker.trim())}&form=${formType}`)
+      const res = await fetch(`/api/edgar?ticker=${encodeURIComponent(t)}&form=${formType}`)
       const body = await res.json()
       if (!res.ok) throw new Error(body.error ?? 'Lookup failed.')
       setFilings([...(body.filings as FilingRef[])].sort((a, b) => b.reportDate.localeCompare(a.reportDate)))
-      if (!body.filings.length) setError(body.note ?? `No ${formType} filings found for ${ticker.toUpperCase()}.`)
+      if (!body.filings.length) setError(body.note ?? `No ${formType} filings found for ${t.toUpperCase()}.`)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Lookup failed.')
     } finally {
@@ -508,8 +552,8 @@ export function Analyzer() {
     }
   }
 
-  async function fetchMarket(symbol?: string) {
-    const sym = (symbol ?? fin?.meta.ticker ?? ticker).trim()
+  async function fetchMarket(symbolArg?: string) {
+    const sym = (symbolArg ?? fin?.meta.ticker ?? symbol ?? ticker).trim()
     if (!sym) return setPriceNote('Enter a ticker or load a filing first.')
     setPriceNote('Fetching...')
     try {
@@ -617,7 +661,7 @@ export function Analyzer() {
                       const s = ratingOf(h)
                       const active = fin === h
                       return (
-                        <tr key={`${h.meta.name}${h.meta.form}${h.meta.periodEnd}`} onClick={() => setFin(h)} className={cn('cursor-pointer border-t border-(--line) hover:bg-(--panel-2)', active && 'bg-(--panel-2)')}>
+                        <tr key={`${h.meta.name}${h.meta.form}${h.meta.periodEnd}`} onClick={() => setFin(h)} className={cn('cursor-pointer border-t border-(--line) hover:bg-(--panel-2)', active && 'bg-(--accent)/15 shadow-[inset_4px_0_0_var(--accent)]')}>
                           <td className="px-3 py-1.5">
                             <span className="block font-semibold">{h.meta.ticker ?? h.meta.name}</span>
                             <span className="block text-[11px] text-(--muted)">{h.meta.form} · {h.meta.periodEnd}</span>
@@ -685,27 +729,91 @@ export function Analyzer() {
           <Panel title="Load filing" className="shrink-0">
             <div className="grid grid-cols-1 gap-3 p-3 md:grid-cols-2">
               <div className="flex flex-col gap-2">
-                <p className="text-xs font-semibold">Look up by ticker</p>
+                <p className="text-xs font-semibold">Search company or ticker</p>
                 <div className="flex gap-2">
-                  <input value={ticker} onChange={(e) => setTicker(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void searchTicker()} placeholder="AAPL" aria-label="Ticker" className="num h-8 w-24 px-2 uppercase" />
+                  <div className="relative">
+                    <input
+                      value={ticker}
+                      onChange={(e) => {
+                        setTicker(e.target.value)
+                        setSymbol(null)
+                        setSuggestOpen(true)
+                        if (!e.target.value.trim()) setSuggest([])
+                      }}
+                      onFocus={() => setSuggestOpen(true)}
+                      onBlur={() => setTimeout(() => setSuggestOpen(false), 150)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'ArrowDown') {
+                          e.preventDefault()
+                          setSuggestOpen(true)
+                          setActive((i) => Math.min(i + 1, suggest.length - 1))
+                        } else if (e.key === 'ArrowUp') {
+                          e.preventDefault()
+                          setActive((i) => Math.max(i - 1, -1))
+                        } else if (e.key === 'Escape') setSuggestOpen(false)
+                        else if (e.key === 'Enter') submit()
+                      }}
+                      placeholder="Apple or AAPL"
+                      aria-label="Ticker"
+                      autoComplete="off"
+                      className="h-8 w-56 px-2"
+                    />
+                    {suggestOpen && suggest.length > 0 && !symbol ? (
+                      <ul className="absolute z-30 mt-1 max-h-72 w-80 overflow-y-auto rounded-md border border-(--line) bg-(--panel) py-1 shadow-xl" role="listbox">
+                        {suggest.map((c, i) => (
+                          <li key={c.ticker}>
+                            <button
+                              type="button"
+                              role="option"
+                              aria-selected={i === active}
+                              onMouseDown={(e) => {
+                                e.preventDefault()
+                                pick(c)
+                              }}
+                              onMouseEnter={() => setActive(i)}
+                              className={cn('flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs', i === active && 'bg-(--panel-2)')}
+                            >
+                              <span className="num w-14 shrink-0 font-semibold">{c.ticker}</span>
+                              <span className="truncate text-(--muted)">{c.name}</span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
                   <select value={formType} onChange={(e) => setFormType(e.target.value as '10-K' | '10-Q')} aria-label="Form type" className="h-8 px-2">
                     <option>10-K</option>
                     <option>10-Q</option>
                   </select>
-                  <button type="button" onClick={() => void searchTicker()} className="flex h-8 items-center gap-1.5 rounded bg-(--up) px-3 text-xs font-bold text-black">
+                  <button type="button" onClick={submit} className="flex h-8 items-center gap-1.5 rounded bg-(--up) px-3 text-xs font-bold text-black">
                     <Search className="size-3.5" /> FIND
                   </button>
                 </div>
                 {filings?.length ? (
                   <ul className="flex flex-col">
-                    {filings.map((f) => (
-                      <li key={f.url}>
-                        <button type="button" onClick={() => void loadFiling(f.url)} className="flex w-full items-center justify-between border-b border-(--line) px-2 py-1.5 text-left text-xs hover:bg-(--panel-2)">
-                          <span className="num">{f.form} · {f.reportDate}</span>
-                          <span className="num text-(--muted)">filed {f.filingDate}</span>
-                        </button>
-                      </li>
-                    ))}
+                    {filings.map((f) => {
+                      const selected = fin?.meta.sourceUrl === f.url
+                      return (
+                        <li key={f.url}>
+                          <button
+                            type="button"
+                            onClick={() => void loadFiling(f.url)}
+                            aria-current={selected ? 'true' : undefined}
+                            className={cn(
+                              'flex w-full items-center justify-between gap-2 border-b border-l-4 border-(--line) px-2 py-1.5 text-left text-xs hover:bg-(--panel-2)',
+                              selected ? 'border-l-(--accent) bg-(--accent)/15 font-semibold' : 'border-l-transparent',
+                            )}
+                          >
+                            <span className="num flex items-center gap-1.5">
+                              {selected ? <Check className="size-3.5 text-(--accent)" /> : null}
+                              {f.form} · {f.reportDate}
+                              {selected ? <span className="rounded bg-(--accent) px-1.5 py-px text-[10px] font-bold text-black">LOADED</span> : null}
+                            </span>
+                            <span className="num font-normal text-(--muted)">filed {f.filingDate}</span>
+                          </button>
+                        </li>
+                      )
+                    })}
                   </ul>
                 ) : null}
                 <div className="flex flex-col gap-1">
