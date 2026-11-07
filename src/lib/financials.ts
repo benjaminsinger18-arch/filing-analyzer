@@ -13,6 +13,12 @@ export type LineItem =
   | 'capex'
   | 'dilutedShares'
   | 'dividends'
+  | 'netInterestIncome'
+  | 'nonInterestIncome'
+  | 'nonInterestExpense'
+  | 'provision'
+  | 'deposits'
+  | 'loans'
   | 'assets'
   | 'currentAssets'
   | 'cash'
@@ -48,6 +54,8 @@ export type MarketData = {
   industry?: string
   /** Set when ratios could not be fetched (missing key, rate limit). */
   ratiosNote?: string
+  /** Provider-computed fundamentals (TTM), used only to fill ratios the filing cannot produce. Percent values are fractions. */
+  fundamentals?: Record<string, number>
 }
 
 /** One Damodaran industry row (US, annual aggregates). Percent-like values are fractions. */
@@ -112,6 +120,12 @@ export const LINE_ITEM_LABELS: Record<LineItem, string> = {
   capex: 'Capital expenditures',
   dilutedShares: 'Diluted weighted shares',
   dividends: 'Dividends paid',
+  netInterestIncome: 'Net interest income',
+  nonInterestIncome: 'Noninterest income',
+  nonInterestExpense: 'Noninterest expense',
+  provision: 'Provision for credit losses',
+  deposits: 'Deposits',
+  loans: 'Loans',
   assets: 'Total assets',
   currentAssets: 'Current assets',
   cash: 'Cash & equivalents',

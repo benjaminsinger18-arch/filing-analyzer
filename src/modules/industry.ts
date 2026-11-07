@@ -21,6 +21,7 @@ type Spec = {
 const SPECS: Spec[] = [
   { id: 'ind-gross-margin', label: 'Gross margin', unit: '%', source: 'gross-margin', key: 'grossMargin', direction: 'higher', formula: 'Gross profit / revenue' },
   { id: 'ind-operating-margin', label: 'Operating margin', unit: '%', source: 'operating-margin', key: 'operatingMargin', direction: 'higher', formula: 'Pre-tax unadjusted operating margin' },
+  { id: 'ind-ebitda-margin', label: 'EBITDA margin', unit: '%', source: 'ebitda-margin', key: 'ebitdaMargin', direction: 'higher', formula: '(Operating income + D&A) / revenue' },
   { id: 'ind-net-margin', label: 'Net margin', unit: '%', source: 'net-margin', key: 'netMargin', direction: 'higher', formula: 'Net income / revenue' },
   { id: 'ind-roe', label: 'Return on equity', unit: '%', source: 'roe', key: 'roe', direction: 'higher', formula: 'Net income / equity (unadjusted)' },
   { id: 'ind-debt-capital', label: 'Debt / capital (book)', unit: '%', source: 'debt-capital', key: 'bookDebtToCapital', direction: 'lower', formula: 'Debt / (debt + equity), book values' },
@@ -91,15 +92,17 @@ export const industry: AnalysisModule = {
     const metrics: Metric[] = SPECS.map((s) => {
       let company: number | null
       let missingWhy: string | undefined
+      let providerFilled = false
       if (s.source === 'debt-capital') {
         company = debtCapital
         missingWhy = 'Not reported: debt or equity'
       } else {
         const m = find(s.source)
         company = m?.value ?? null
+        if (m?.source === 'provider') providerFilled = true
         missingWhy = m?.reason ?? (s.provider && !fin.price ? 'Needs a share price (click Fetch latest)' : undefined)
       }
-      let companySource: string | undefined
+      let companySource: string | undefined = providerFilled ? 'provider' : undefined
       if (company === null && s.provider) {
         const p = fin.market?.ratios[s.provider]
         if (p !== undefined) {

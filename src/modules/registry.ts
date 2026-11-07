@@ -1,4 +1,5 @@
 import { cashflow } from './cashflow'
+import { bank } from './bank'
 import { efficiency } from './efficiency'
 import { growthModule } from './growth'
 import { industry } from './industry'
@@ -6,6 +7,7 @@ import { leverage } from './leverage'
 import { liquidity } from './liquidity'
 import { market } from './market'
 import { notes } from './notes'
+import { fillFromProvider } from './provider-fill'
 import { profitability } from './profitability'
 import { rating } from './rating'
 import { scores } from './scores'
@@ -24,6 +26,7 @@ export const RATIO_MODULES: AnalysisModule[] = [
   efficiency,
   growthModule,
   cashflow,
+  bank,
   scores,
   valuation,
   industry,
@@ -39,7 +42,8 @@ export const ALL_MODULES = [...RATIO_MODULES, ...SUMMARY_MODULES]
 export function runModules(fin: Financials): Record<string, ModuleResult> {
   const results: Record<string, ModuleResult> = {}
   for (const mod of RATIO_MODULES) {
-    results[mod.id] = mod.run(fin, results)
+    // Provider values fill gaps before later modules (industry, rating) read the results.
+    results[mod.id] = fillFromProvider(mod.run(fin, results), fin)
   }
   for (const mod of SUMMARY_MODULES) {
     results[mod.id] = mod.run(fin, results)

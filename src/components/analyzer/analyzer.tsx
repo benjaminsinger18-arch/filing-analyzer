@@ -192,7 +192,7 @@ function RatioTable({ metrics }: { metrics: { moduleTitle: string; m: Metric }[]
                   <td className="px-3 py-1.5 font-medium">{m.label}</td>
                   <td className={cn('num px-3 py-1.5 text-right', m.value === null && 'text-(--muted)')}>{formatMetric(m)}</td>
                   <td className={cn('num px-3 py-1.5 text-right', scoreTone(s))}>{s === null ? '' : Math.round(s)}</td>
-                  <td className="px-3 py-1.5 text-xs text-(--muted)"><Formula formula={m.formula} id={m.id} /></td>
+                  <td className="px-3 py-1.5 text-xs text-(--muted)"><Formula formula={m.formula} id={m.id} />{m.source === 'provider' ? <span className="ml-2 rounded bg-(--panel-2) px-1.5 py-px text-[10px] text-(--accent)">Finnhub, TTM</span> : null}</td>
                 </tr>
                 {open === m.id ? (
                   <tr className="border-b border-(--line) bg-(--panel-2)">
