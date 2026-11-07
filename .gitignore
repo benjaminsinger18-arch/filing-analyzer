@@ -42,3 +42,4 @@ next-env.d.ts
 dev.log
 dev*.log
 !.env.example
+start3400.log

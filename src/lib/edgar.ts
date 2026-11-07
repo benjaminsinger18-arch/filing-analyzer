@@ -31,6 +31,13 @@ export async function lookupCik(ticker: string): Promise<{ cik: string; name: st
   return { cik: String(hit.cik_str).padStart(10, '0'), name: hit.title }
 }
 
+export async function companyList(): Promise<{ ticker: string; name: string; cik: string }[]> {
+  const data = await getJson<Record<string, { cik_str: number; ticker: string; title: string }>>(
+    'https://www.sec.gov/files/company_tickers.json',
+  )
+  return Object.values(data).map((c) => ({ ticker: c.ticker, name: c.title, cik: String(c.cik_str).padStart(10, '0') }))
+}
+
 export type FilingRef = { form: string; filingDate: string; accession: string; primaryDocument: string; reportDate: string; url: string }
 
 export async function latestFilings(cik: string, forms: string[], limit = 4): Promise<FilingRef[]> {
