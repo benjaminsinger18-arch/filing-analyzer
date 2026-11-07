@@ -19,7 +19,7 @@ Drop in an SEC 10-K or 10-Q and get financial ratios, quality scores, rule-based
 | Growth | YoY revenue, operating income, net income, EPS |
 | Cash-flow quality | OCF/net income, free cash flow, FCF margin, accruals ratio |
 | Quality & distress | Piotroski F-score, Altman Z''-score |
-| Valuation (optional) | P/E, P/B, market cap, EV/EBITDA, FCF yield; needs a share price you type in |
+| Valuation (optional) | P/E, P/B, market cap, EV/EBITDA, FCF yield; needs a share price (type one or click Fetch latest) |
 | Screening rating | weighted composite using the published rubric in `src/modules/rating.ts` |
 | Observations | templated flags such as operating loss, thin coverage, weak cash conversion |
 
@@ -42,3 +42,4 @@ npm test
 - Banks, insurers and other filers without a classified balance sheet will show `n/a` for several ratios; Altman Z'' is unreliable for them.
 - Total debt sums the debt tags a company reports; check the trace for what was included.
 - A single filing cannot show trends beyond one comparison period.
+- "Fetch latest" uses Yahoo Finance's unofficial chart endpoint (no key). It can be delayed, rate-limited or change without notice; the price date is shown next to valuation. The price date usually differs from the filing period.

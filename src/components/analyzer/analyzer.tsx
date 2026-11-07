@@ -260,6 +260,8 @@ export function Analyzer() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [price, setPrice] = useState('')
+  const [priceAsOf, setPriceAsOf] = useState<string | null>(null)
+  const [priceNote, setPriceNote] = useState<string | null>(null)
   const [ticker, setTicker] = useState('')
   const [formType, setFormType] = useState<'10-K' | '10-Q'>('10-K')
   const [filings, setFilings] = useState<FilingRef[] | null>(null)
@@ -304,8 +306,8 @@ export function Analyzer() {
   const results = useMemo(() => {
     if (!fin) return null
     const p = Number(price)
-    return runModules({ ...fin, price: p > 0 ? p : undefined }, enabled)
-  }, [fin, price, enabled])
+    return runModules({ ...fin, price: p > 0 ? p : undefined, priceAsOf: priceAsOf ?? undefined }, enabled)
+  }, [fin, price, priceAsOf, enabled])
 
   const present = (f: Financials) => {
     setFin(f)
@@ -350,6 +352,22 @@ export function Analyzer() {
       setError(e instanceof Error ? e.message : 'Lookup failed.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function fetchPrice() {
+    const sym = (fin?.meta.ticker ?? ticker).trim()
+    if (!sym) return setPriceNote('Enter a ticker or load a filing first.')
+    setPriceNote('Fetching...')
+    try {
+      const res = await fetch(`/api/price?ticker=${encodeURIComponent(sym)}`)
+      const body = await res.json()
+      if (!res.ok) throw new Error(body.error ?? 'Price lookup failed.')
+      setPrice(String(body.price))
+      setPriceAsOf(body.asOf)
+      setPriceNote(`${body.currency} ${body.price} as of ${body.asOf ?? 'latest'} · ${body.source}`)
+    } catch (e) {
+      setPriceNote(e instanceof Error ? e.message : 'Price lookup failed.')
     }
   }
 
@@ -519,10 +537,14 @@ export function Analyzer() {
                     ))}
                   </ul>
                 ) : null}
-                <label className="flex items-center gap-2 text-[11px] text-(--muted)">
-                  Share price (optional)
-                  <input value={price} onChange={(e) => setPrice(e.target.value)} inputMode="decimal" placeholder="185.50" className="num h-7 w-24 px-2 text-xs" />
-                </label>
+                <div className="flex flex-col gap-1">
+                  <label className="flex items-center gap-2 text-[11px] text-(--muted)">
+                    Share price (optional)
+                    <input value={price} onChange={(e) => { setPrice(e.target.value); setPriceAsOf(null); setPriceNote(null) }} inputMode="decimal" placeholder="185.50" className="num h-7 w-24 px-2 text-xs" />
+                    <button type="button" onClick={() => void fetchPrice()} className="h-7 rounded border border-(--line) px-2 text-[11px] text-(--accent) hover:bg-(--panel-2)">Fetch latest</button>
+                  </label>
+                  {priceNote ? <p className="text-[11px] text-(--muted)">{priceNote}</p> : null}
+                </div>
               </div>
               <div
                 onDragOver={(e) => { e.preventDefault(); setDrag(true) }}

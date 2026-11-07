@@ -55,6 +55,8 @@ export type Financials = {
   bsPrior: Items
   /** Optional user-entered share price for valuation ratios. */
   price?: number
+  /** Date of the entered or fetched price (ISO), shown next to valuation ratios. */
+  priceAsOf?: string
 }
 
 export const LINE_ITEM_LABELS: Record<LineItem, string> = {
