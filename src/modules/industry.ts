@@ -33,6 +33,9 @@ const SPECS: Spec[] = [
   { id: 'ind-ev-sales', label: 'EV / sales', unit: 'x', source: 'ev-sales', key: 'evSales', direction: 'lower', formula: 'Enterprise value / revenue', provider: 'evRevenue' },
 ]
 
+/** Source metric id -> its industry comparison row id. */
+export const INDUSTRY_ROW_FOR: Record<string, string> = Object.fromEntries(SPECS.map((s) => [s.source, s.id]))
+
 /** 'On par' (the only neutral read) means within 5% of the benchmark. */
 const TOLERANCE = 0.05
 /** For percent metrics against a non-positive benchmark: flag by points, at least this many. */

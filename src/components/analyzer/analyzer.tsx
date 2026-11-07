@@ -1,376 +1,34 @@
 'use client'
 
-import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { Check, Moon, Search, SlidersHorizontal, Sun, Upload } from 'lucide-react'
 import './terminal.css'
-import { LINE_ITEM_LABELS, type Financials, type IndustryBenchmark, type Items, type LineItem, type MarketData } from '@/lib/financials'
+import type { Financials, IndustryBenchmark, MarketData } from '@/lib/financials'
 import { normalize, NotIxbrlError } from '@/lib/ixbrl/normalize'
 import { isIxbrl, parseIxbrl } from '@/lib/ixbrl/parse'
 import { RATIO_MODULES, runModules } from '@/modules/registry'
-import { RUBRIC_TABLES, scoreMetric } from '@/modules/rating'
-import type { Metric, ModuleResult, Note, RatingResult } from '@/modules/types'
 import type { Company } from '@/lib/search'
 import { cn } from '@/lib/utils'
-import { Formula } from './formula'
+import { FundamentalsChart, StatStrip, CHART_ITEMS, type ChartTab } from './charts'
+import { scoreDepth, scoreTone, tierTone } from './format'
+import { IndustryTable, MarketTable, NoteRow, RatioTable, RubricTable, industryRowVisible } from './tables'
+import { Chip, Panel, Tab } from './ui'
+import { ComparePanel } from './compare'
+import { downloadCsv, ratiosCsv } from './export'
+import { RatioBook } from './ratio-book'
+import { TrendPanel, seriesFor } from './trend'
+import { priorValues } from '@/modules/prior'
 
 const MAX_BYTES = 40 * 1024 * 1024
 const STORAGE_KEY = 'analyzer.disabledModules'
 const THEME_KEY = 'analyzer.theme'
+const HISTORY_KEY = 'analyzer.history'
+const HISTORY_MAX = 12
+const keyOf = (f: Financials) => `${f.meta.name}|${f.meta.form}|${f.meta.periodEnd}`
 const EXAMPLES = ['AAPL', 'MSFT', 'KO', 'JPM', 'TSLA', 'XOM']
 
 type FilingRef = { form: string; filingDate: string; reportDate: string; url: string }
-type ChartTab = 'income' | 'balance' | 'cash'
 type BottomTab = 'ratios' | 'industry' | 'market' | 'rubric' | 'filing'
-
-export function formatMetric(m: Metric): string {
-  if (m.value === null) return 'n/a'
-  const v = m.value
-  switch (m.unit) {
-    case '%': return `${(v * 100).toFixed(1)}%`
-    case 'x': return `${v.toFixed(2)}x`
-    case 'days': return `${Math.round(v)} d`
-    case 'usd': return compactUsd(v)
-    case 'score': return m.id === 'piotroski' ? `${v} / 9` : v.toFixed(2)
-    default: return String(v)
-  }
-}
-
-const compactUsd = (v: number) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', notation: 'compact', maximumFractionDigits: 2 }).format(v)
-
-// Middle scores (45-59) are plain: neutral text and a gray bar, so only green and red carry meaning.
-const scoreTone = (s: number | null) => (s === null ? 'text-(--muted)' : s >= 60 ? 'text-(--up)' : s >= 45 ? 'text-(--fg)' : 'text-(--down)')
-const scoreDepth = (s: number) => (s >= 60 ? 'var(--depth-up)' : s >= 45 ? 'color-mix(in srgb, var(--muted) 25%, transparent)' : 'var(--depth-down)')
-const tierTone: Record<RatingResult['tier'], string> = {
-  Strong: 'bg-(--up-bg) text-(--up)',
-  Solid: 'bg-(--up-bg) text-(--up)',
-  Mixed: 'bg-(--warn-bg) text-(--warn)',
-  Weak: 'bg-(--down-bg) text-(--down)',
-  'Insufficient data': 'bg-(--panel-2) text-(--muted)',
-}
-
-function Panel({ title, right, children, className }: { title: string; right?: ReactNode; children: ReactNode; className?: string }) {
-  return (
-    <section className={cn('flex min-h-0 flex-col rounded-md border border-(--line) bg-(--panel)', className)}>
-      <header className="flex items-center justify-between gap-2 border-b border-(--line) px-3 py-2">
-        <h3 className="text-xs font-semibold tracking-wide text-(--accent) uppercase">{title}</h3>
-        {right}
-      </header>
-      {children}
-    </section>
-  )
-}
-
-function Chip({ children, className }: { children: ReactNode; className?: string }) {
-  return <span className={cn('inline-flex w-fit rounded px-2 py-0.5 text-[11px] font-medium', className)}>{children}</span>
-}
-
-function Tab({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn('rounded px-2.5 py-1 text-xs', active ? 'bg-(--panel-2) font-semibold text-(--accent)' : 'text-(--muted) hover:text-(--fg)')}
-    >
-      {children}
-    </button>
-  )
-}
-
-/** Which direction of change is good for each chart item; 'none' items are not judged. */
-const GOOD_WHEN: Partial<Record<LineItem, 'down' | 'none'>> = { liabilities: 'down', debt: 'down', capex: 'none', da: 'none' }
-
-function changeColor(item: LineItem, cur: number, prior: number): string {
-  const good = GOOD_WHEN[item]
-  if (good === 'none' || cur === prior) return 'var(--accent)'
-  return (cur > prior) === (good !== 'down') ? 'var(--up)' : 'var(--down)'
-}
-
-const CHART_ITEMS: Record<ChartTab, { label: string; items: LineItem[] }> = {
-  income: { label: 'Income', items: ['revenue', 'grossProfit', 'operatingIncome', 'netIncome'] },
-  balance: { label: 'Balance sheet', items: ['assets', 'liabilities', 'equity', 'cash', 'debt'] },
-  cash: { label: 'Cash flow', items: ['ocf', 'capex', 'da'] },
-}
-
-function chartSources(fin: Financials, tab: ChartTab): { cur: Items; prior: Items; curLabel: string; priorLabel: string } {
-  if (tab === 'balance') return { cur: fin.bsCur, prior: fin.bsPrior, curLabel: fin.meta.periodEnd, priorLabel: 'prior year-end' }
-  if (tab === 'cash') return { cur: fin.ytd, prior: fin.ytdPrior, curLabel: fin.basis === 'quarter' ? 'YTD' : 'FY', priorLabel: 'prior YTD' }
-  return { cur: fin.cur, prior: fin.prior, curLabel: fin.basis === 'quarter' ? 'quarter' : 'FY', priorLabel: fin.basis === 'quarter' ? 'prior-yr quarter' : 'prior FY' }
-}
-
-function FundamentalsChart({ fin, tab }: { fin: Financials; tab: ChartTab }) {
-  const src = chartSources(fin, tab)
-  const rows = CHART_ITEMS[tab].items
-    .filter((i) => src.cur[i] || src.prior[i])
-    .map((i) => ({
-      item: i,
-      name: LINE_ITEM_LABELS[i],
-      cur: src.cur[i]?.value ?? 0,
-      prior: src.prior[i]?.value ?? 0,
-      has: !!src.cur[i],
-      hasPrior: !!src.prior[i],
-    }))
-  if (!rows.length) return null
-  return (
-    <div className="min-h-72 flex-1 px-2 pb-2">
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={rows} margin={{ top: 12, right: 12, bottom: 0, left: 4 }} barGap={3}>
-          <CartesianGrid vertical={false} stroke="var(--line)" />
-          <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'var(--muted)' }} tickLine={false} axisLine={false} />
-          <YAxis tick={{ fontSize: 11, fill: 'var(--muted)' }} tickLine={false} axisLine={false} tickFormatter={(v) => compactUsd(v).replace('.00', '')} width={64} />
-          <Tooltip
-            cursor={{ fill: 'var(--panel-2)' }}
-            content={({ active, payload }) => {
-              if (!active || !payload?.length) return null
-              const p = payload[0].payload as (typeof rows)[number]
-              const chg = p.hasPrior && p.prior !== 0 ? (p.cur - p.prior) / Math.abs(p.prior) : null
-              return (
-                <div className="rounded border border-(--line) bg-(--panel) px-3 py-2 text-xs text-(--fg) shadow-lg">
-                  <p className="font-semibold">{p.name}</p>
-                  {p.has ? <p className="num">{src.curLabel}: {compactUsd(p.cur)}</p> : null}
-                  {p.hasPrior ? <p className="num text-(--muted)">{src.priorLabel}: {compactUsd(p.prior)}</p> : null}
-                  {chg !== null ? <p className="num" style={{ color: changeColor(p.item, p.cur, p.prior) }}>{chg >= 0 ? '+' : ''}{(chg * 100).toFixed(1)}%</p> : null}
-                </div>
-              )
-            }}
-          />
-          <Bar dataKey="prior" fill="var(--line)" radius={[3, 3, 0, 0]} maxBarSize={36} />
-          <Bar dataKey="cur" radius={[3, 3, 0, 0]} maxBarSize={36}>
-            {rows.map((r) => (
-              <Cell key={r.name} fill={changeColor(r.item, r.cur, r.prior)} />
-            ))}
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
-  )
-}
-
-function StatStrip({ fin }: { fin: Financials }) {
-  const src = chartSources(fin, 'income')
-  const items = (['revenue', 'operatingIncome', 'netIncome', 'epsDiluted'] as LineItem[]).filter((i) => src.cur[i])
-  if (!items.length) return null
-  return (
-    <div className="flex flex-wrap gap-px bg-(--line)">
-      {items.map((i) => {
-        const cur = src.cur[i]!.value
-        const prior = src.prior[i]?.value
-        const chg = prior !== undefined && prior > 0 ? (cur - prior) / prior : null
-        return (
-          <div key={i} className="min-w-40 flex-1 bg-(--panel) px-3 py-2">
-            <p className="text-[11px] text-(--muted)">{LINE_ITEM_LABELS[i]}</p>
-            <p className="num text-base font-semibold">{i === 'epsDiluted' ? `$${cur.toFixed(2)}` : compactUsd(cur)}</p>
-            {chg !== null ? <p className={cn('num text-xs', chg >= 0 ? 'text-(--up)' : 'text-(--down)')}>{chg >= 0 ? '+' : ''}{(chg * 100).toFixed(1)}%</p> : null}
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-function RatioTable({ metrics }: { metrics: { moduleTitle: string; m: Metric }[] }) {
-  const [open, setOpen] = useState<string | null>(null)
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-150 text-left">
-        <thead>
-          <tr className="border-b border-(--line) text-[11px] text-(--muted)">
-            <th className="px-3 py-1.5 font-medium">Module</th>
-            <th className="px-3 py-1.5 font-medium">Metric</th>
-            <th className="px-3 py-1.5 text-right font-medium">Value</th>
-            <th className="px-3 py-1.5 text-right font-medium">Score</th>
-            <th className="px-3 py-1.5 font-medium">Formula</th>
-          </tr>
-        </thead>
-        <tbody>
-          {metrics.map(({ moduleTitle, m }) => {
-            const s = scoreMetric(m.id, m.value)
-            return (
-              <Fragment key={m.id}>
-                <tr onClick={() => setOpen(open === m.id ? null : m.id)} className="cursor-pointer border-b border-(--line) hover:bg-(--panel-2)">
-                  <td className="px-3 py-1.5 text-(--muted)">{moduleTitle}</td>
-                  <td className="px-3 py-1.5 font-medium">{m.label}</td>
-                  <td className={cn('num px-3 py-1.5 text-right', m.value === null && 'text-(--muted)')}>{formatMetric(m)}</td>
-                  <td className={cn('num px-3 py-1.5 text-right', scoreTone(s))}>{s === null ? '' : Math.round(s)}</td>
-                  <td className="px-3 py-1.5 text-xs text-(--muted)"><Formula formula={m.formula} id={m.id} />{m.source === 'provider' ? <span className="ml-2 rounded bg-(--panel-2) px-1.5 py-px text-[10px] text-(--accent)">Finnhub, TTM</span> : null}</td>
-                </tr>
-                {open === m.id ? (
-                  <tr className="border-b border-(--line) bg-(--panel-2)">
-                    <td colSpan={5} className="px-3 py-2 text-xs">
-                      <p className="mb-1.5 text-(--fg)"><Formula formula={m.formula} id={m.id} />{m.hint ? <span className="ml-3 text-(--muted)">{m.hint}</span> : null}</p>
-                      {m.inputs.length ? (
-                        <table className="w-full max-w-2xl">
-                          <tbody>
-                            {m.inputs.filter((i) => !Number.isNaN(i.value)).map((i) => (
-                              <tr key={i.label}>
-                                <td className="py-0.5 pr-3">{i.label}</td>
-                                <td className="num py-0.5 pr-3 text-right">{Math.abs(i.value) >= 1e5 ? i.value.toLocaleString('en-US') : i.value}</td>
-                                <td className="py-0.5 text-(--muted)">{i.tag}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      ) : null}
-                    </td>
-                  </tr>
-                ) : null}
-              </Fragment>
-            )
-          })}
-        </tbody>
-      </table>
-    </div>
-  )
-}
-
-function RubricTable() {
-  return (
-    <div className="flex flex-col gap-3 p-3 text-xs">
-      <p className="text-(--muted)">
-        Metrics map to 0-100 through these tiers; categories average their metrics; the composite averages categories. 75+ Strong, 60+ Solid, 45+ Mixed, else Weak.
-        Altman Z&apos;&apos;: 100 above 2.6, 55 to 1.1, else 10. Liabilities/assets: 100 up to 40%, 75 to 60%, 50 to 80%, else 25.
-      </p>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-120 text-left">
-          <thead>
-            <tr className="border-b border-(--line) text-[11px] text-(--muted)">
-              <th className="py-1.5 font-medium">Metric</th>
-              <th className="py-1.5 font-medium">Tiers (at least threshold gives score)</th>
-              <th className="py-1.5 font-medium">Otherwise</th>
-            </tr>
-          </thead>
-          <tbody>
-            {Object.entries(RUBRIC_TABLES)
-              .filter(([id]) => id !== 'liabilities-assets')
-              .map(([id, t]) => (
-                <tr key={id} className="border-b border-(--line)">
-                  <td className="py-1.5 font-medium">{t.label}</td>
-                  <td className="num py-1.5">{t.tiers.map(([min, s]) => `≥ ${t.pct ? `${(min * 100).toFixed(0)}%` : min} → ${s}`).join(' · ')}</td>
-                  <td className="num py-1.5">{t.floor}</td>
-                </tr>
-              ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  )
-}
-
-function NoteRow({ n }: { n: Note }) {
-  const dot = n.tone === 'good' ? 'bg-(--up)' : n.tone === 'watch' ? 'bg-(--warn)' : 'bg-(--muted)'
-  return (
-    <li className="flex gap-2 border-b border-(--line) px-3 py-2 last:border-0">
-      <span className={cn('mt-1.5 size-1.5 shrink-0 rounded-full', dot)} />
-      <p className="text-xs leading-relaxed">{n.text}</p>
-    </li>
-  )
-}
-
-const readTone: Record<string, string> = {
-  Favorable: 'text-(--up)',
-  Unfavorable: 'text-(--down)',
-  'On par': 'text-(--accent)',
-  'n/a': 'text-(--muted)',
-}
-
-function deltaText(c: { deltaPct: number | null; deltaPts: number | null }) {
-  if (c.deltaPct !== null) return `${c.deltaPct >= 0 ? '+' : ''}${(c.deltaPct * 100).toFixed(0)}%`
-  if (c.deltaPts !== null) return `${c.deltaPts >= 0 ? '+' : ''}${(c.deltaPts * 100).toFixed(1)} pts`
-  return ''
-}
-
-/** Green = favorable side, red = unfavorable side, cyan = on par. Never the raw sign of the difference. */
-const deltaTone = (c: { read: string }) => readTone[c.read] ?? 'text-(--muted)'
-
-/** A row shows only when the company value exists and at least one benchmark can be compared. */
-const industryRowVisible = (m: Metric) => m.value !== null && !!m.compare && (m.compare.flag !== 'n/a' || (!!m.compare.market && m.compare.market.flag !== 'n/a'))
-
-function IndustryTable({ result }: { result?: ModuleResult }) {
-  const rows = result?.metrics.filter(industryRowVisible) ?? []
-  if (!result || !rows.length) return null
-  const fmt = (m: Metric, v: number) => formatMetric({ ...m, value: v })
-  return (
-    <div className="flex flex-col">
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-190 text-left">
-          <thead>
-            <tr className="border-b border-(--line) text-[11px] text-(--muted)">
-              <th className="px-3 py-1.5 font-medium">Metric</th>
-              <th className="px-3 py-1.5 text-right font-medium">Company</th>
-              <th className="px-3 py-1.5 text-right font-medium">Industry avg</th>
-              <th className="px-3 py-1.5 text-right font-medium">vs. industry</th>
-              <th className="px-3 py-1.5 font-medium">Flag</th>
-              <th className="px-3 py-1.5 font-medium">Read</th>
-              <th className="px-3 py-1.5 text-right font-medium">Market avg</th>
-              <th className="px-3 py-1.5 text-right font-medium">vs. market</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((m) => {
-              const c = m.compare!
-              const mk = c.market
-              const own = c.flag !== 'n/a'
-              const mkOk = !!mk && mk.flag !== 'n/a'
-              return (
-                <tr key={m.id} className="border-b border-(--line)">
-                  <td className="px-3 py-1.5 font-medium">{m.label}</td>
-                  <td className="num px-3 py-1.5 text-right">
-                    {fmt(m, m.value!)}
-                    {c.companySource ? <span className="ml-1 text-[10px] text-(--muted)">({c.companySource})</span> : null}
-                  </td>
-                  <td className="num px-3 py-1.5 text-right">{own ? fmt(m, c.benchmark) : ''}</td>
-                  <td className={cn('num px-3 py-1.5 text-right', deltaTone(c))}>{own ? deltaText(c) : ''}</td>
-                  <td className="px-3 py-1.5">
-                    {own ? c.flag : ''}
-                    {own && c.note ? <span className="ml-1 text-[10px] text-(--muted)" title={c.note}>*</span> : null}
-                  </td>
-                  <td className={cn('px-3 py-1.5', own ? readTone[c.read] : '')}>{own ? c.read : ''}</td>
-                  <td className="num px-3 py-1.5 text-right text-(--muted)">{mkOk ? fmt(m, mk!.benchmark) : ''}</td>
-                  <td className={cn('num px-3 py-1.5 text-right', mkOk ? deltaTone(mk!) : '')}>{mkOk ? deltaText(mk!) : ''}</td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
-      <ul>{result.notes.map((n, i) => <NoteRow key={i} n={n} />)}</ul>
-      <p className="px-3 py-2 text-[11px] text-(--muted)">
-        Damodaran US aggregates (not medians), Jan 2026. Flag: Above/Below outside +/-5%; * = percentage points (negative average). Green = favorable, red = unfavorable: higher is better for margins, returns and coverage; lower is better for debt and multiples (below average = cheaper). Market avg: total US market.
-      </p>
-    </div>
-  )
-}
-
-function MarketTable({ result }: { result?: ModuleResult }) {
-  if (!result || !result.metrics.length) return null
-  return (
-    <div className="flex flex-col">
-      <table className="w-full text-left">
-        <thead>
-          <tr className="border-b border-(--line) text-[11px] text-(--muted)">
-            <th className="px-3 py-1.5 font-medium">Ratio</th>
-            <th className="px-3 py-1.5 text-right font-medium">Provider</th>
-            <th className="px-3 py-1.5 text-right font-medium">From filing</th>
-          </tr>
-        </thead>
-        <tbody>
-          {result.metrics.map((m) => {
-            const ours = m.inputs.find((i) => i.label === 'Computed from filing')
-            return (
-              <tr key={m.id} className="border-b border-(--line)">
-                <td className="px-3 py-1.5 font-medium">{m.label}</td>
-                <td className="num px-3 py-1.5 text-right">{formatMetric(m)}</td>
-                <td className="num px-3 py-1.5 text-right text-(--muted)">{ours ? formatMetric({ ...m, value: ours.value }) : ''}</td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-      <ul>{result.notes.map((n, i) => <NoteRow key={i} n={n} />)}</ul>
-    </div>
-  )
-}
 
 export function Analyzer() {
   const [fin, setFin] = useState<Financials | null>(null)
@@ -394,6 +52,9 @@ export function Analyzer() {
   const [drag, setDrag] = useState(false)
   const [chartTab, setChartTab] = useState<ChartTab>('income')
   const [bottomTab, setBottomTab] = useState<BottomTab>('ratios')
+  const [compareKeys, setCompareKeys] = useState<string[]>([])
+  const [bulkNote, setBulkNote] = useState<string | null>(null)
+  const historyReady = useRef(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -408,6 +69,23 @@ export function Analyzer() {
       if (t) setDark(t === 'dark')
     } catch {}
   }, [])
+
+  // Analyzed filings survive a reload (parsed figures only, no market or industry data).
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(HISTORY_KEY)
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- restoring persisted history after hydration
+      if (raw) setHistory(JSON.parse(raw) as Financials[])
+    } catch {}
+    historyReady.current = true
+  }, [])
+
+  useEffect(() => {
+    if (!historyReady.current) return
+    try {
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(history))
+    } catch {}
+  }, [history])
 
   // Restore a shared link (?t=AAPL&url=<filing>) once after hydration.
   const restored = useRef(false)
@@ -498,11 +176,31 @@ export function Analyzer() {
       if (f.meta.ticker) void fetchMarket(f.meta.ticker)
     }
     void loadIndustry(f.meta.ticker ? `ticker=${encodeURIComponent(f.meta.ticker)}` : '')
+    addHistory(f)
+  }
+
+  function addHistory(f: Financials) {
     setHistory((h) =>
-      [f, ...h.filter((x) => !(x.meta.name === f.meta.name && x.meta.form === f.meta.form && x.meta.periodEnd === f.meta.periodEnd))]
+      [f, ...h.filter((x) => keyOf(x) !== keyOf(f))]
         .sort((a, b) => b.meta.periodEnd.localeCompare(a.meta.periodEnd) || a.meta.name.localeCompare(b.meta.name))
-        .slice(0, 12),
+        .slice(0, HISTORY_MAX),
     )
+  }
+
+  /** Loads the most recent filings in the list into the history (for trends) without changing the open filing. */
+  async function loadMany(list: FilingRef[]) {
+    const todo = list.slice(0, 5)
+    let done = 0
+    for (const f of todo) {
+      setBulkNote(`Loading ${done + 1} of ${todo.length}...`)
+      try {
+        const res = await fetch(`/api/edgar?url=${encodeURIComponent(f.url)}`)
+        const body = await res.json()
+        if (res.ok) addHistory(body.financials)
+      } catch {}
+      done++
+    }
+    setBulkNote(null)
   }
 
   async function handleFile(file: File) {
@@ -635,6 +333,8 @@ export function Analyzer() {
     }
   }
 
+  const histResults = useMemo(() => new Map(history.map((h) => [h, runModules(h)] as const)), [history])
+  const priorMap = useMemo(() => (fin ? priorValues(fin) : {}), [fin])
   const rating = results?.rating?.rating
   const scored = (rating?.categories ?? []).filter((c) => c.score !== null).sort((a, b) => (b.score as number) - (a.score as number))
   const ratingSummary = scored.length >= 2 ? `Strongest: ${scored[0].label}. Weakest: ${scored[scored.length - 1].label}.` : null
@@ -647,9 +347,11 @@ export function Analyzer() {
   const book = allMetrics.filter(({ m }) => m.value !== null)
   const ratioRows = allMetrics.filter(({ m }) => m.value !== null)
   const ratingOf = (f: Financials) => {
-    const r = runModules(f).rating?.rating
+    const r = histResults.get(f)?.rating?.rating
     return r?.composite == null ? null : Math.round(r.composite)
   }
+  const compared = compareKeys.map((k) => history.find((h) => keyOf(h) === k)).filter((h): h is Financials => !!h)
+  const series = fin ? seriesFor(fin, history, histResults) : []
 
   return (
     <div className={cn('terminal flex h-svh flex-col overflow-hidden', dark && 'dark')}>
@@ -719,6 +421,14 @@ export function Analyzer() {
                       return (
                         <tr key={`${h.meta.name}${h.meta.form}${h.meta.periodEnd}`} onClick={() => setFin(h)} className={cn('cursor-pointer border-t border-(--line) hover:bg-(--panel-2)', active && 'bg-(--accent)/15 shadow-[inset_4px_0_0_var(--accent)]')}>
                           <td className="px-3 py-1.5">
+                            <input
+                              type="checkbox"
+                              aria-label="Compare"
+                              checked={compareKeys.includes(keyOf(h))}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={() => setCompareKeys((c) => (c.includes(keyOf(h)) ? c.filter((k) => k !== keyOf(h)) : [...c, keyOf(h)].slice(-2)))}
+                              className="float-left mt-1 mr-2"
+                            />
                             <span className="block font-semibold">{h.meta.ticker ?? h.meta.name}</span>
                             <span className="block text-[11px] text-(--muted)">{h.meta.form} · {h.meta.periodEnd}</span>
                           </td>
@@ -826,6 +536,12 @@ export function Analyzer() {
                     })}
                   </ul>
                 ) : null}
+                {filings && filings.length > 1 && filings[0].form === '10-K' ? (
+                  <div className="flex items-center gap-2 text-[11px] text-(--muted)">
+                    <button type="button" disabled={!!bulkNote} onClick={() => void loadMany(filings)} className="rounded border border-(--line) px-2 py-0.5 text-xs text-(--accent) hover:bg-(--panel-2) disabled:opacity-50">Load last 5 for trends</button>
+                    {bulkNote}
+                  </div>
+                ) : null}
                 {!fin && !filings?.length ? (
                   <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-(--muted)">
                     Try
@@ -859,6 +575,10 @@ export function Analyzer() {
             {loading ? <p className="px-3 pb-3 text-xs text-(--muted)">Working...</p> : null}
             {error ? <p className="mx-3 mb-3 rounded bg-(--down-bg) px-3 py-2 text-xs text-(--down)">{error}</p> : null}
           </Panel>
+
+          {compared.length === 2 ? (
+            <ComparePanel a={compared[0]} b={compared[1]} ra={histResults.get(compared[0]) ?? {}} rb={histResults.get(compared[1]) ?? {}} onClose={() => setCompareKeys([])} />
+          ) : null}
 
           {fin ? (
           <Panel
@@ -902,6 +622,7 @@ export function Analyzer() {
           </Panel>
           ) : null}
 
+          <TrendPanel series={series} />
         </div>
 
         {/* Right: rating + ratio book */}
@@ -939,29 +660,7 @@ export function Analyzer() {
             </ul>
           </Panel>
           ) : null}
-          {book.length ? (
-          <Panel title="Ratio book" className="min-h-60 flex-1">
-            <div className="min-h-0 overflow-y-auto">
-              {book.length ? (
-                <table className="w-full text-left">
-                  <tbody>
-                    {book.map(({ m }) => {
-                      const s = scoreMetric(m.id, m.value)
-                      return (
-                        <tr key={m.id} className="border-b border-(--line)">
-                          <td className="px-3 py-1.5">
-                            <span className="text-xs">{m.label}</span>
-                          </td>
-                          <td className={cn('num px-3 py-1.5 text-right text-xs', scoreTone(s))}>{formatMetric(m)}</td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              ) : null}
-            </div>
-          </Panel>
-          ) : null}
+          {book.length ? <RatioBook rows={book} prior={priorMap} industry={results?.industry} /> : null}
         </div>
       </main>
       {fin ? (
@@ -976,6 +675,9 @@ export function Analyzer() {
           {marketRows ? <Tab active={tab === 'market'} onClick={() => setBottomTab('market')}>C. Market</Tab> : null}
           <Tab active={tab === 'rubric'} onClick={() => setBottomTab('rubric')}>D. Rubric</Tab>
           <Tab active={tab === 'filing'} onClick={() => setBottomTab('filing')}>E. Filing</Tab>
+          {tab === 'ratios' && ratioRows.length ? (
+            <button type="button" onClick={() => downloadCsv(`${fin?.meta.ticker ?? 'filing'}-ratios.csv`, ratiosCsv(ratioRows))} className="rounded px-2.5 py-1 text-xs text-(--accent) hover:bg-(--panel-2)">CSV</button>
+          ) : null}
         </div>
       }
     >
