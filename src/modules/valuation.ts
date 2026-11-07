@@ -36,7 +36,7 @@ export const valuation: AnalysisModule = {
       id: 'valuation',
       title: 'Valuation',
       notes: [
-        { tone: 'info', text: 'Uses diluted weighted shares and your price. Not a price target.' },
+        { tone: 'info', text: `Price $${fin.price}${fin.priceAsOf ? ` as of ${fin.priceAsOf}` : ''} against financials for the period ending ${fin.meta.periodEnd}. Uses diluted weighted shares. Not a price target.` },
       ],
       metrics: [
         metric('pe', 'P/E', 'x', `Price / Diluted EPS${fin.basis === 'quarter' ? ' (quarter x4)' : ''}`,
