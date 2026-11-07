@@ -11,6 +11,7 @@ import { RATIO_MODULES, runModules } from '@/modules/registry'
 import { RUBRIC_TABLES, scoreMetric } from '@/modules/rating'
 import type { Metric, ModuleResult, Note, RatingResult } from '@/modules/types'
 import { cn } from '@/lib/utils'
+import { Formula } from './formula'
 
 const MAX_BYTES = 40 * 1024 * 1024
 const STORAGE_KEY = 'analyzer.disabledModules'
@@ -188,12 +189,12 @@ function RatioTable({ metrics }: { metrics: { moduleTitle: string; m: Metric }[]
                   <td className="px-3 py-1.5 font-medium">{m.label}</td>
                   <td className={cn('num px-3 py-1.5 text-right', m.value === null && 'text-(--muted)')}>{formatMetric(m)}</td>
                   <td className={cn('num px-3 py-1.5 text-right', scoreTone(s))}>{s === null ? '-' : Math.round(s)}</td>
-                  <td className="px-3 py-1.5 text-xs text-(--muted)">{m.reason ?? m.formula}</td>
+                  <td className="px-3 py-1.5 text-xs text-(--muted)">{m.reason ?? <Formula formula={m.formula} id={m.id} />}</td>
                 </tr>
                 {open === m.id ? (
                   <tr className="border-b border-(--line) bg-(--panel-2)">
                     <td colSpan={5} className="px-3 py-2 text-xs">
-                      <p className="mb-1 text-(--muted)">{m.formula}{m.hint ? ` · ${m.hint}` : ''}</p>
+                      <p className="mb-1.5 text-(--fg)"><Formula formula={m.formula} id={m.id} />{m.hint ? <span className="ml-3 text-(--muted)">{m.hint}</span> : null}</p>
                       {m.inputs.length ? (
                         <table className="w-full max-w-2xl">
                           <tbody>
@@ -243,7 +244,7 @@ function RubricTable() {
               .map(([id, t]) => (
                 <tr key={id} className="border-b border-(--line)">
                   <td className="py-1.5 font-medium">{t.label}</td>
-                  <td className="num py-1.5">{t.tiers.map(([min, s]) => `>= ${t.pct ? `${(min * 100).toFixed(0)}%` : min} → ${s}`).join(' · ')}</td>
+                  <td className="num py-1.5">{t.tiers.map(([min, s]) => `≥ ${t.pct ? `${(min * 100).toFixed(0)}%` : min} → ${s}`).join(' · ')}</td>
                   <td className="num py-1.5">{t.floor}</td>
                 </tr>
               ))}
@@ -564,6 +565,7 @@ export function Analyzer() {
           <span className="hidden text-xs text-(--muted) sm:inline">10-K / 10-Q analyzer</span>
         </div>
         <div className="flex items-center gap-2">
+          <a href="#appendix" className="rounded px-2 py-1 text-xs text-(--muted) hover:text-(--fg)">Appendix</a>
           <details className="relative">
             <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded px-2 py-1 text-xs text-(--muted) hover:text-(--fg)">
               <SlidersHorizontal className="size-3.5" /> Show / hide
@@ -594,7 +596,8 @@ export function Analyzer() {
         Rules-based screen of one filing. Not investment advice.
       </div>
 
-      <main className="grid min-h-0 flex-1 grid-cols-1 gap-2 overflow-y-auto p-2 lg:grid-cols-[280px_minmax(0,1fr)_340px] lg:overflow-hidden">
+      <div className="min-h-0 flex-1 overflow-y-auto scroll-smooth">
+      <main className="grid grid-cols-1 gap-2 p-2 lg:h-[calc(100svh-4.5rem)] lg:grid-cols-[280px_minmax(0,1fr)_340px] lg:overflow-hidden">
         {/* Left: watchlist + observations */}
         <div className="flex min-h-0 flex-col gap-2 lg:overflow-y-auto">
           <Panel title="Analyzed" className="shrink-0">
@@ -731,48 +734,6 @@ export function Analyzer() {
             {error ? <p className="mx-3 mb-3 rounded bg-(--down-bg) px-3 py-2 text-xs text-(--down)">{error}</p> : null}
           </Panel>
 
-          <Panel
-            title="Details"
-            className="min-h-60 shrink-0"
-            right={
-              <div className="flex gap-1">
-                <Tab active={bottomTab === 'ratios'} onClick={() => setBottomTab('ratios')}>Ratios</Tab>
-                <Tab active={bottomTab === 'industry'} onClick={() => setBottomTab('industry')}>Industry</Tab>
-                <Tab active={bottomTab === 'market'} onClick={() => setBottomTab('market')}>Market</Tab>
-                <Tab active={bottomTab === 'rubric'} onClick={() => setBottomTab('rubric')}>Rubric</Tab>
-                <Tab active={bottomTab === 'filing'} onClick={() => setBottomTab('filing')}>Filing</Tab>
-              </div>
-            }
-          >
-            {bottomTab === 'industry' ? (
-              results ? <IndustryTable result={results.industry} /> : <p className="p-4 text-xs text-(--muted)">Load a filing.</p>
-            ) : bottomTab === 'market' ? (
-              results ? <MarketTable result={results.market} /> : <p className="p-4 text-xs text-(--muted)">Load a filing.</p>
-            ) : bottomTab === 'rubric' ? (
-              <RubricTable />
-            ) : bottomTab === 'filing' ? (
-              fin ? (
-                <dl className="grid grid-cols-[140px_1fr] gap-x-3 gap-y-1.5 p-3 text-xs">
-                  {[
-                    ['Company', fin.meta.name], ['Ticker', fin.meta.ticker ?? '-'], ['CIK', fin.meta.cik ?? '-'], ['Form', `${fin.meta.form} ${fin.meta.fiscalPeriod}`],
-                    ['Period end', fin.meta.periodEnd], ['Basis', fin.basis === 'annual' ? 'Annual' : 'Quarter (ratios annualized x4; cash flow YTD)'],
-                    ['Balance-sheet comparison', fin.bsPrior.assets ? 'prior fiscal year-end' : 'not found'],
-                  ].map(([k, v]) => (
-                    <Fragment key={k}>
-                      <dt className="text-(--muted)">{k}</dt>
-                      <dd className="num">{v}</dd>
-                    </Fragment>
-                  ))}
-                </dl>
-              ) : (
-                <p className="p-4 text-xs text-(--muted)">No filing loaded.</p>
-              )
-            ) : results ? (
-              <RatioTable metrics={allMetrics} />
-            ) : (
-              <p className="p-4 text-xs text-(--muted)">Load a filing. Click a row for inputs and XBRL tags.</p>
-            )}
-          </Panel>
         </div>
 
         {/* Right: rating + ratio book */}
@@ -829,6 +790,51 @@ export function Analyzer() {
           </Panel>
         </div>
       </main>
+      <section id="appendix" className="p-2 pt-0">
+    <Panel
+      title="Appendix"
+      className="min-h-60"
+      right={
+        <div className="flex gap-1">
+          <Tab active={bottomTab === 'ratios'} onClick={() => setBottomTab('ratios')}>A. Ratios</Tab>
+          <Tab active={bottomTab === 'industry'} onClick={() => setBottomTab('industry')}>B. Industry</Tab>
+          <Tab active={bottomTab === 'market'} onClick={() => setBottomTab('market')}>C. Market</Tab>
+          <Tab active={bottomTab === 'rubric'} onClick={() => setBottomTab('rubric')}>D. Rubric</Tab>
+          <Tab active={bottomTab === 'filing'} onClick={() => setBottomTab('filing')}>E. Filing</Tab>
+        </div>
+      }
+    >
+      {bottomTab === 'industry' ? (
+        results ? <IndustryTable result={results.industry} /> : <p className="p-4 text-xs text-(--muted)">Load a filing.</p>
+      ) : bottomTab === 'market' ? (
+        results ? <MarketTable result={results.market} /> : <p className="p-4 text-xs text-(--muted)">Load a filing.</p>
+      ) : bottomTab === 'rubric' ? (
+        <RubricTable />
+      ) : bottomTab === 'filing' ? (
+        fin ? (
+          <dl className="grid grid-cols-[140px_1fr] gap-x-3 gap-y-1.5 p-3 text-xs">
+            {[
+              ['Company', fin.meta.name], ['Ticker', fin.meta.ticker ?? '-'], ['CIK', fin.meta.cik ?? '-'], ['Form', `${fin.meta.form} ${fin.meta.fiscalPeriod}`],
+              ['Period end', fin.meta.periodEnd], ['Basis', fin.basis === 'annual' ? 'Annual' : 'Quarter (ratios annualized x4; cash flow YTD)'],
+              ['Balance-sheet comparison', fin.bsPrior.assets ? 'prior fiscal year-end' : 'not found'],
+            ].map(([k, v]) => (
+              <Fragment key={k}>
+                <dt className="text-(--muted)">{k}</dt>
+                <dd className="num">{v}</dd>
+              </Fragment>
+            ))}
+          </dl>
+        ) : (
+          <p className="p-4 text-xs text-(--muted)">No filing loaded.</p>
+        )
+      ) : results ? (
+        <RatioTable metrics={allMetrics} />
+      ) : (
+        <p className="p-4 text-xs text-(--muted)">Load a filing. Click a row for inputs and XBRL tags.</p>
+      )}
+    </Panel>
+      </section>
+      </div>
     </div>
   )
 }
