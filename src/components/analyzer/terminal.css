@@ -69,3 +69,12 @@
 .terminal input::placeholder {
   color: var(--muted);
 }
+
+/* Typeset formulas */
+.terminal .formula .katex {
+  font-size: 1.05em;
+  color: var(--fg);
+}
+.terminal .formula .katex .mord.text {
+  font-family: inherit;
+}
