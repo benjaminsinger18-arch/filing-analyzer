@@ -17,6 +17,7 @@ import { Formula } from './formula'
 const MAX_BYTES = 40 * 1024 * 1024
 const STORAGE_KEY = 'analyzer.disabledModules'
 const THEME_KEY = 'analyzer.theme'
+const EXAMPLES = ['AAPL', 'MSFT', 'KO', 'JPM', 'TSLA', 'XOM']
 
 type FilingRef = { form: string; filingDate: string; reportDate: string; url: string }
 type ChartTab = 'income' | 'balance' | 'cash'
@@ -408,6 +409,33 @@ export function Analyzer() {
     } catch {}
   }, [])
 
+  // Restore a shared link (?t=AAPL&url=<filing>) once after hydration.
+  const restored = useRef(false)
+  useEffect(() => {
+    if (restored.current) return
+    restored.current = true
+    const q = new URLSearchParams(window.location.search)
+    const t = q.get('t')
+    const url = q.get('url')
+    if (t) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- restoring state from the URL after hydration
+      setTicker(t)
+      setSymbol(t)
+    }
+    if (url) void loadFiling(url)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const sourceUrl = fin?.meta.sourceUrl
+  const metaTicker = fin?.meta.ticker
+  useEffect(() => {
+    if (!fin || !restored.current) return
+    const q = new URLSearchParams()
+    if (metaTicker) q.set('t', metaTicker)
+    if (sourceUrl) q.set('url', sourceUrl)
+    window.history.replaceState(null, '', q.size ? `?${q}` : window.location.pathname)
+  }, [fin, metaTicker, sourceUrl])
+
   const toggleModule = (id: string) => {
     setEnabled((prev) => {
       const next = new Set(prev)
@@ -552,6 +580,29 @@ export function Analyzer() {
     }
   }
 
+  /** Example button: look up the ticker and open its latest 10-K. */
+  async function quickStart(sym: string) {
+    setTicker(sym)
+    setSymbol(sym)
+    setFormType('10-K')
+    setError(null)
+    setLoading(true)
+    setFilings(null)
+    try {
+      const res = await fetch(`/api/edgar?ticker=${sym}&form=10-K`)
+      const body = await res.json()
+      if (!res.ok) throw new Error(body.error ?? 'Lookup failed.')
+      const list = [...(body.filings as FilingRef[])].sort((a, b) => b.reportDate.localeCompare(a.reportDate))
+      setFilings(list)
+      if (list[0]) await loadFiling(list[0].url)
+      else setError(body.note ?? `No 10-K filings found for ${sym}.`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Lookup failed.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   async function fetchMarket(symbolArg?: string) {
     const sym = (symbolArg ?? fin?.meta.ticker ?? symbol ?? ticker).trim()
     if (!sym) return setPriceNote('Enter a ticker or load a filing first.')
@@ -585,6 +636,8 @@ export function Analyzer() {
   }
 
   const rating = results?.rating?.rating
+  const scored = (rating?.categories ?? []).filter((c) => c.score !== null).sort((a, b) => (b.score as number) - (a.score as number))
+  const ratingSummary = scored.length >= 2 ? `Strongest: ${scored[0].label}. Weakest: ${scored[scored.length - 1].label}.` : null
   const industryRows = results?.industry?.metrics.filter(industryRowVisible).length ?? 0
   const marketRows = results?.market?.metrics.length ?? 0
   const tab: BottomTab = (bottomTab === 'industry' && !industryRows) || (bottomTab === 'market' && !marketRows) ? 'ratios' : bottomTab
@@ -677,13 +730,6 @@ export function Analyzer() {
                 </table>
               ) : null}
             </div>
-          </Panel>
-          ) : null}
-          {results && results.notes.notes.length ? (
-          <Panel title="Observations" className="min-h-40 flex-1">
-            <ul className="min-h-0 overflow-y-auto">
-              {results.notes.notes.map((n, i) => <NoteRow key={i} n={n} />)}
-            </ul>
           </Panel>
           ) : null}
         </div>
@@ -780,6 +826,14 @@ export function Analyzer() {
                     })}
                   </ul>
                 ) : null}
+                {!fin && !filings?.length ? (
+                  <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-(--muted)">
+                    Try
+                    {EXAMPLES.map((sym) => (
+                      <button key={sym} type="button" onClick={() => void quickStart(sym)} className="num rounded border border-(--line) px-2 py-0.5 text-xs text-(--accent) hover:bg-(--panel-2)">{sym}</button>
+                    ))}
+                  </div>
+                ) : null}
                 <div className="flex flex-col gap-1">
                   <label className="flex items-center gap-2 text-[11px] text-(--muted)">
                     Share price (optional)
@@ -863,6 +917,7 @@ export function Analyzer() {
                   </div>
                   <Chip className={cn('text-sm', tierTone[rating.tier])}>{rating.tier}</Chip>
                 </div>
+                {ratingSummary ? <p className="text-xs text-(--muted)">{ratingSummary}</p> : null}
                 <div className="flex flex-col gap-1.5">
                   {rating.categories.filter((c) => c.score !== null).map((c) => (
                     <div key={c.id} title={c.basis.join('\n')} className="relative flex items-center justify-between overflow-hidden rounded px-2 py-1">
@@ -877,6 +932,13 @@ export function Analyzer() {
           </Panel>
           ) : null}
 
+          {results && results.notes.notes.length ? (
+          <Panel title="Observations" className="min-h-40 flex-1">
+            <ul className="min-h-0 overflow-y-auto">
+              {results.notes.notes.map((n, i) => <NoteRow key={i} n={n} />)}
+            </ul>
+          </Panel>
+          ) : null}
           {book.length ? (
           <Panel title="Ratio book" className="min-h-60 flex-1">
             <div className="min-h-0 overflow-y-auto">
