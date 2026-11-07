@@ -879,10 +879,9 @@ export function Analyzer() {
                     {book.map(({ m }) => {
                       const s = scoreMetric(m.id, m.value)
                       return (
-                        <tr key={m.id} className="relative border-b border-(--line)">
-                          <td className="relative px-3 py-1.5">
-                            {s !== null ? <span className="absolute inset-y-0 right-0" style={{ width: `${s}%`, background: scoreDepth(s) }} /> : null}
-                            <span className="relative text-xs">{m.label}</span>
+                        <tr key={m.id} className="border-b border-(--line)">
+                          <td className="px-3 py-1.5">
+                            <span className="text-xs">{m.label}</span>
                           </td>
                           <td className={cn('num px-2 py-1.5 text-right text-xs', scoreTone(s))}>{formatMetric(m)}</td>
                           <td className="num px-3 py-1.5 text-right text-xs text-(--muted)">{s === null ? '' : Math.round(s)}</td>
