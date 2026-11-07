@@ -1,8 +1,10 @@
 import { cashflow } from './cashflow'
 import { efficiency } from './efficiency'
 import { growthModule } from './growth'
+import { industry } from './industry'
 import { leverage } from './leverage'
 import { liquidity } from './liquidity'
+import { market } from './market'
 import { notes } from './notes'
 import { profitability } from './profitability'
 import { rating } from './rating'
@@ -24,6 +26,8 @@ export const RATIO_MODULES: AnalysisModule[] = [
   cashflow,
   scores,
   valuation,
+  industry,
+  market,
 ]
 export const SUMMARY_MODULES: AnalysisModule[] = [rating, notes]
 export const ALL_MODULES = [...RATIO_MODULES, ...SUMMARY_MODULES]

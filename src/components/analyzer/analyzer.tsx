@@ -4,21 +4,21 @@ import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from '
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Moon, Search, SlidersHorizontal, Sun, Upload } from 'lucide-react'
 import './terminal.css'
-import { LINE_ITEM_LABELS, type Financials, type Items, type LineItem } from '@/lib/financials'
+import { LINE_ITEM_LABELS, type Financials, type IndustryBenchmark, type Items, type LineItem, type MarketData } from '@/lib/financials'
 import { normalize, NotIxbrlError } from '@/lib/ixbrl/normalize'
 import { isIxbrl, parseIxbrl } from '@/lib/ixbrl/parse'
 import { RATIO_MODULES, runModules } from '@/modules/registry'
 import { RUBRIC_TABLES, scoreMetric } from '@/modules/rating'
-import type { Metric, Note, RatingResult } from '@/modules/types'
+import type { Metric, ModuleResult, Note, RatingResult } from '@/modules/types'
 import { cn } from '@/lib/utils'
 
 const MAX_BYTES = 40 * 1024 * 1024
-const STORAGE_KEY = 'analyzer.enabledModules'
+const STORAGE_KEY = 'analyzer.disabledModules'
 const THEME_KEY = 'analyzer.theme'
 
 type FilingRef = { form: string; filingDate: string; reportDate: string; url: string }
 type ChartTab = 'income' | 'balance' | 'cash'
-type BottomTab = 'ratios' | 'rubric' | 'filing'
+type BottomTab = 'ratios' | 'industry' | 'market' | 'rubric' | 'filing'
 
 export function formatMetric(m: Metric): string {
   if (m.value === null) return 'n/a'
@@ -254,13 +254,101 @@ function NoteRow({ n }: { n: Note }) {
   )
 }
 
+const readTone: Record<string, string> = {
+  Favorable: 'text-(--up)',
+  Unfavorable: 'text-(--down)',
+  'On par': 'text-(--accent)',
+  Neutral: 'text-(--muted)',
+  'n/a': 'text-(--muted)',
+}
+
+function IndustryTable({ result }: { result?: ModuleResult }) {
+  if (!result) return <p className="p-4 text-xs text-(--muted)">Enable the Industry module.</p>
+  const fmt = (m: Metric, v: number) => formatMetric({ ...m, value: v })
+  return (
+    <div className="flex flex-col">
+      {result.metrics.length ? (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-150 text-left">
+            <thead>
+              <tr className="border-b border-(--line) text-[11px] text-(--muted)">
+                <th className="px-3 py-1.5 font-medium">Metric</th>
+                <th className="px-3 py-1.5 text-right font-medium">Company</th>
+                <th className="px-3 py-1.5 text-right font-medium">Industry avg</th>
+                <th className="px-3 py-1.5 text-right font-medium">vs. industry</th>
+                <th className="px-3 py-1.5 font-medium">Flag</th>
+                <th className="px-3 py-1.5 font-medium">Read</th>
+              </tr>
+            </thead>
+            <tbody>
+              {result.metrics.map((m) => {
+                const c = m.compare
+                return (
+                  <tr key={m.id} className="border-b border-(--line)">
+                    <td className="px-3 py-1.5 font-medium">{m.label}</td>
+                    <td className="num px-3 py-1.5 text-right">{m.value === null ? 'n/a' : fmt(m, m.value)}</td>
+                    <td className="num px-3 py-1.5 text-right">{c ? fmt(m, c.industry) : '-'}</td>
+                    <td className={cn('num px-3 py-1.5 text-right', c?.deltaPct == null ? 'text-(--muted)' : c.deltaPct >= 0 ? 'text-(--up)' : 'text-(--down)')}>
+                      {c?.deltaPct == null ? '-' : `${c.deltaPct >= 0 ? '+' : ''}${(c.deltaPct * 100).toFixed(0)}%`}
+                    </td>
+                    <td className="px-3 py-1.5">{c ? c.flag : <span className="text-(--muted)">{m.reason}</span>}</td>
+                    <td className={cn('px-3 py-1.5', c ? readTone[c.read] : '')}>{c ? c.read : ''}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+      <ul>{result.notes.map((n, i) => <NoteRow key={i} n={n} />)}</ul>
+      <p className="px-3 py-2 text-[11px] text-(--muted)">
+        Damodaran US industry aggregates (not medians), Jan 2026; definitions differ slightly from this app. Flag: Above/Below outside +/-10%. Valuation multiples are Above/Below only.
+      </p>
+    </div>
+  )
+}
+
+function MarketTable({ result }: { result?: ModuleResult }) {
+  if (!result) return <p className="p-4 text-xs text-(--muted)">Enable the Market module.</p>
+  return (
+    <div className="flex flex-col">
+      {result.metrics.length ? (
+        <table className="w-full text-left">
+          <thead>
+            <tr className="border-b border-(--line) text-[11px] text-(--muted)">
+              <th className="px-3 py-1.5 font-medium">Ratio</th>
+              <th className="px-3 py-1.5 text-right font-medium">Provider</th>
+              <th className="px-3 py-1.5 text-right font-medium">From filing</th>
+            </tr>
+          </thead>
+          <tbody>
+            {result.metrics.map((m) => {
+              const ours = m.inputs.find((i) => i.label === 'Computed from filing')
+              return (
+                <tr key={m.id} className="border-b border-(--line)">
+                  <td className="px-3 py-1.5 font-medium">{m.label}</td>
+                  <td className="num px-3 py-1.5 text-right">{formatMetric(m)}</td>
+                  <td className="num px-3 py-1.5 text-right text-(--muted)">{ours ? `${ours.value.toFixed(2)}x` : '-'}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      ) : null}
+      <ul>{result.notes.map((n, i) => <NoteRow key={i} n={n} />)}</ul>
+    </div>
+  )
+}
+
 export function Analyzer() {
   const [fin, setFin] = useState<Financials | null>(null)
   const [history, setHistory] = useState<Financials[]>([])
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [price, setPrice] = useState('')
-  const [priceAsOf, setPriceAsOf] = useState<string | null>(null)
+  const [market, setMarket] = useState<MarketData | null>(null)
+  const [industry, setIndustry] = useState<IndustryBenchmark | null>(null)
+  const [industryOptions, setIndustryOptions] = useState<string[]>([])
   const [priceNote, setPriceNote] = useState<string | null>(null)
   const [ticker, setTicker] = useState('')
   const [formType, setFormType] = useState<'10-K' | '10-Q'>('10-K')
@@ -275,8 +363,11 @@ export function Analyzer() {
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY)
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- restoring persisted preferences after hydration
-      if (raw) setEnabled(new Set(JSON.parse(raw) as string[]))
+      if (raw) {
+        const disabled = new Set(JSON.parse(raw) as string[])
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- restoring persisted preferences after hydration
+        setEnabled(new Set(RATIO_MODULES.map((m) => m.id).filter((id) => !disabled.has(id))))
+      }
       const t = localStorage.getItem(THEME_KEY)
       if (t) setDark(t === 'dark')
     } catch {}
@@ -288,7 +379,7 @@ export function Analyzer() {
       if (next.has(id)) next.delete(id)
       else next.add(id)
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify([...next]))
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(RATIO_MODULES.map((m) => m.id).filter((id) => !next.has(id))))
       } catch {}
       return next
     })
@@ -306,11 +397,25 @@ export function Analyzer() {
   const results = useMemo(() => {
     if (!fin) return null
     const p = Number(price)
-    return runModules({ ...fin, price: p > 0 ? p : undefined, priceAsOf: priceAsOf ?? undefined }, enabled)
-  }, [fin, price, priceAsOf, enabled])
+    return runModules({ ...fin, price: p > 0 ? p : undefined, priceAsOf: market?.priceAsOf ?? undefined, market: market ?? undefined, industry: industry ?? undefined }, enabled)
+  }, [fin, price, market, industry, enabled])
+
+  async function loadIndustry(params: string) {
+    try {
+      const res = await fetch(`/api/industry?${params}`)
+      const body = await res.json()
+      setIndustryOptions(body.options ?? [])
+      setIndustry(body.industry ?? null)
+    } catch {
+      setIndustry(null)
+    }
+  }
 
   const present = (f: Financials) => {
     setFin(f)
+    setMarket(null)
+    setPrice('')
+    void loadIndustry(f.meta.ticker ? `ticker=${encodeURIComponent(f.meta.ticker)}` : '')
     setHistory((h) =>
       [f, ...h.filter((x) => !(x.meta.name === f.meta.name && x.meta.form === f.meta.form && x.meta.periodEnd === f.meta.periodEnd))]
         .sort((a, b) => b.meta.periodEnd.localeCompare(a.meta.periodEnd) || a.meta.name.localeCompare(b.meta.name))
@@ -355,17 +460,18 @@ export function Analyzer() {
     }
   }
 
-  async function fetchPrice() {
+  async function fetchMarket() {
     const sym = (fin?.meta.ticker ?? ticker).trim()
     if (!sym) return setPriceNote('Enter a ticker or load a filing first.')
     setPriceNote('Fetching...')
     try {
-      const res = await fetch(`/api/price?ticker=${encodeURIComponent(sym)}`)
+      const res = await fetch(`/api/market?ticker=${encodeURIComponent(sym)}`)
       const body = await res.json()
       if (!res.ok) throw new Error(body.error ?? 'Price lookup failed.')
-      setPrice(String(body.price))
-      setPriceAsOf(body.asOf)
-      setPriceNote(`${body.currency} ${body.price} as of ${body.asOf ?? 'latest'} · ${body.source}`)
+      const m = body as MarketData
+      setMarket(m)
+      setPrice(String(m.price))
+      setPriceNote(`USD ${m.price} as of ${m.priceAsOf ?? 'latest'} · ${m.source}`)
     } catch (e) {
       setPriceNote(e instanceof Error ? e.message : 'Price lookup failed.')
     }
@@ -388,7 +494,7 @@ export function Analyzer() {
 
   const rating = results?.rating?.rating
   const allMetrics = results
-    ? RATIO_MODULES.filter((m) => results[m.id]).flatMap((m) => results[m.id].metrics.map((metric) => ({ moduleTitle: m.title, m: metric })))
+    ? RATIO_MODULES.filter((m) => results[m.id] && m.id !== 'industry' && m.id !== 'market').flatMap((m) => results[m.id].metrics.map((metric) => ({ moduleTitle: m.title, m: metric })))
     : []
   const book = allMetrics.filter(({ m }) => m.value !== null)
   const ratingOf = (f: Financials) => {
@@ -487,6 +593,17 @@ export function Analyzer() {
                 <div className="flex items-center gap-2 text-[11px] text-(--muted)">
                   <Chip className="bg-(--panel-2) text-(--fg)">{fin.meta.form}{fin.meta.fiscalPeriod ? ` ${fin.meta.fiscalPeriod}` : ''}</Chip>
                   <span className="num">period end {fin.meta.periodEnd}</span>
+                  <select
+                    value=""
+                    onChange={(e) => e.target.value && void loadIndustry(`name=${encodeURIComponent(e.target.value)}`)}
+                    aria-label="Industry"
+                    className="h-6 max-w-44 px-1 text-[11px]"
+                  >
+                    <option value="">{industry ? industry.name : 'Pick industry'}</option>
+                    {industryOptions.map((o) => (
+                      <option key={o} value={o}>{o}</option>
+                    ))}
+                  </select>
                   {fin.meta.sourceUrl ? <a className="text-(--accent) underline" href={fin.meta.sourceUrl} target="_blank" rel="noreferrer">filing</a> : null}
                 </div>
               ) : null
@@ -540,8 +657,8 @@ export function Analyzer() {
                 <div className="flex flex-col gap-1">
                   <label className="flex items-center gap-2 text-[11px] text-(--muted)">
                     Share price (optional)
-                    <input value={price} onChange={(e) => { setPrice(e.target.value); setPriceAsOf(null); setPriceNote(null) }} inputMode="decimal" placeholder="185.50" className="num h-7 w-24 px-2 text-xs" />
-                    <button type="button" onClick={() => void fetchPrice()} className="h-7 rounded border border-(--line) px-2 text-[11px] text-(--accent) hover:bg-(--panel-2)">Fetch latest</button>
+                    <input value={price} onChange={(e) => { setPrice(e.target.value); setPriceNote(null) }} inputMode="decimal" placeholder="185.50" className="num h-7 w-24 px-2 text-xs" />
+                    <button type="button" onClick={() => void fetchMarket()} className="h-7 rounded border border-(--line) px-2 text-[11px] text-(--accent) hover:bg-(--panel-2)">Fetch latest</button>
                   </label>
                   {priceNote ? <p className="text-[11px] text-(--muted)">{priceNote}</p> : null}
                 </div>
@@ -569,12 +686,18 @@ export function Analyzer() {
             right={
               <div className="flex gap-1">
                 <Tab active={bottomTab === 'ratios'} onClick={() => setBottomTab('ratios')}>Ratios</Tab>
+                <Tab active={bottomTab === 'industry'} onClick={() => setBottomTab('industry')}>Industry</Tab>
+                <Tab active={bottomTab === 'market'} onClick={() => setBottomTab('market')}>Market</Tab>
                 <Tab active={bottomTab === 'rubric'} onClick={() => setBottomTab('rubric')}>Rubric</Tab>
                 <Tab active={bottomTab === 'filing'} onClick={() => setBottomTab('filing')}>Filing</Tab>
               </div>
             }
           >
-            {bottomTab === 'rubric' ? (
+            {bottomTab === 'industry' ? (
+              results ? <IndustryTable result={results.industry} /> : <p className="p-4 text-xs text-(--muted)">Load a filing.</p>
+            ) : bottomTab === 'market' ? (
+              results ? <MarketTable result={results.market} /> : <p className="p-4 text-xs text-(--muted)">Load a filing.</p>
+            ) : bottomTab === 'rubric' ? (
               <RubricTable />
             ) : bottomTab === 'filing' ? (
               fin ? (

@@ -15,6 +15,16 @@ export type Metric = {
   /** Why value is null, or a short caveat. */
   reason?: string
   hint?: string
+  /** Present on industry-comparison rows. */
+  compare?: Comparison
+}
+
+export type Comparison = {
+  industry: number
+  industryName: string
+  deltaPct: number | null
+  flag: 'Above' | 'At' | 'Below' | 'n/a'
+  read: 'Favorable' | 'Unfavorable' | 'On par' | 'Neutral' | 'n/a'
 }
 
 export type Note = { tone: 'good' | 'watch' | 'info'; text: string }

@@ -45,6 +45,8 @@ export const valuation: AnalysisModule = {
           { 'Market cap': mcap, "Stockholders' equity": fin.bsCur.equity }, (v) => (v["Stockholders' equity"] <= 0 ? null : v['Market cap'] / v["Stockholders' equity"])),
         metric('mcap', 'Market cap (approx.)', 'usd', 'Price x diluted weighted shares', { 'Market cap': mcap }, (v) => v['Market cap']),
         evMetric,
+        metric('ev-sales', 'EV / sales', 'x', `Enterprise value / Revenue${fin.basis === 'quarter' ? ' (quarter x4)' : ''}`,
+          { 'Enterprise value': ev, Revenue: fin.cur.revenue }, (v) => (v.Revenue <= 0 ? null : v['Enterprise value'] / (v.Revenue * f))),
         metric('fcf-yield', 'FCF yield', '%', 'Free cash flow / Market cap',
           { 'Free cash flow': fin.ytd.ocf && fin.ytd.capex ? { value: fin.ytd.ocf.value - fin.ytd.capex.value, tag: 'OCF - capex' } : undefined, 'Market cap': mcap },
           (v) => div(v['Free cash flow'], v['Market cap'])),
