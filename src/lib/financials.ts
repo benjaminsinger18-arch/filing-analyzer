@@ -38,6 +38,7 @@ export type MarketRatios = {
 
 /** Provider-reported market data (Alpha Vantage), fetched on demand. */
 export type MarketData = {
+  ticker: string
   price: number
   priceAsOf: string | null
   source: string

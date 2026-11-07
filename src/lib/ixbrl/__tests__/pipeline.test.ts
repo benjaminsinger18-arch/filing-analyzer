@@ -80,6 +80,14 @@ describe('modules', () => {
     expect(val('ccc').value).toBeCloseTo((150 / 1000) * 365 + (100 / 600) * 365 - (80 / 600) * 365)
   })
 
+  it('falls back to a company-specific D&A tag when no us-gaap D&A tag is reported', () => {
+    const html = buildFixture()
+      .replace('us-gaap:DepreciationDepletionAndAmortization', 'msft:DepreciationAmortizationAndOther')
+    const f = normalize(parseIxbrl(html))
+    expect(f.ytd.da?.value).toBe(30 * M)
+    expect(f.ytd.da?.tag).toBe('ext:DepreciationAmortizationAndOther')
+  })
+
   it('computes Altman Z-double-prime', () => {
     const z = 6.56 * (400 / 2000) + 3.26 * (500 / 2000) + 6.72 * (200 / 2000) + 1.05 * (1100 / 900)
     expect(val('altman').value).toBeCloseTo(z)

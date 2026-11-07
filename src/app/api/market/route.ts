@@ -80,6 +80,7 @@ export async function GET(req: Request) {
     if (price === undefined) return NextResponse.json({ error: `No quote found for ${ticker}.` }, { status: 404 })
 
     const data: MarketData = {
+      ticker,
       price,
       priceAsOf,
       source,
