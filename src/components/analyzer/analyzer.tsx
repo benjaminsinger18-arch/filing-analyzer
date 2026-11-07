@@ -878,7 +878,7 @@ export function Analyzer() {
           ) : null}
 
           {book.length ? (
-          <Panel title="Ratio book" className="min-h-60 flex-1" right={<span className="text-[11px] text-(--muted)">value · score</span>}>
+          <Panel title="Ratio book" className="min-h-60 flex-1">
             <div className="min-h-0 overflow-y-auto">
               {book.length ? (
                 <table className="w-full text-left">
@@ -890,8 +890,7 @@ export function Analyzer() {
                           <td className="px-3 py-1.5">
                             <span className="text-xs">{m.label}</span>
                           </td>
-                          <td className={cn('num px-2 py-1.5 text-right text-xs', scoreTone(s))}>{formatMetric(m)}</td>
-                          <td className="num px-3 py-1.5 text-right text-xs text-(--muted)">{s === null ? '' : Math.round(s)}</td>
+                          <td className={cn('num px-3 py-1.5 text-right text-xs', scoreTone(s))}>{formatMetric(m)}</td>
                         </tr>
                       )
                     })}
