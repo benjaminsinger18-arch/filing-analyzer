@@ -12,12 +12,13 @@ Drop in an SEC 10-K or 10-Q and get financial ratios, quality scores, rule-based
 
 | Module | What it computes |
 | --- | --- |
-| Profitability | gross / operating / net margin, ROA, ROE, equity multiplier |
+| Profitability | gross / operating / net / EBITDA margin, ROA, ROE, equity multiplier |
 | Liquidity | current, quick, cash ratio, working capital |
 | Leverage & solvency | debt/equity, net debt, interest coverage, liabilities/assets, debt/EBITDA |
 | Efficiency | asset turnover, DSO, DIO, DPO, cash conversion cycle |
 | Growth | YoY revenue, operating income, net income, EPS |
 | Cash-flow quality | OCF/net income, free cash flow, FCF margin, accruals ratio |
+| Banking | net interest income, net interest margin (approx.), efficiency ratio, noninterest income share, credit-loss provision, loans/deposits, equity/assets; shown only for filers that report them |
 | Quality & distress | Piotroski F-score, Altman Z''-score |
 | Industry comparison | company vs. Damodaran US industry averages: margins, ROE, debt/capital, coverage, P/E, P/B, EV/EBITDA, EV/sales, with Above/At/Below flags (+/-5%) and direction-aware colors (lower is favorable for debt and multiples) |
 | Market ratios (provider) | Finnhub-reported P/E, PEG, EV/EBITDA, EV/revenue, P/B, beta, dividend yield beside the filing-based ones; needs a free `FINNHUB_API_KEY` |
@@ -53,6 +54,8 @@ Environment (`.env.local`, all optional except for the feature they enable):
 - Total debt sums the reported debt tags; the trace lists them.
 - One filing gives one comparison period, so no trends.
 - Fetch latest runs on demand to protect free-tier quotas. The price date usually differs from the filing period.
+- Ratios the filing cannot produce are filled from Finnhub's trailing-twelve-month figures (margins, returns, current and quick ratio, debt/equity, interest coverage, turnover, growth) and tagged "Finnhub, TTM" in the appendix. A value computed from the filing is never replaced.
+- Banks skip the industrial approximations (derived operating income, interest-based coverage, debt ratios) and get the Banking module instead.
 - The Modules menu only shows or hides ratio sections. Every module always runs.
 - Fallbacks: interest paid stands in for interest expense, and operating income is derived from pre-tax income plus interest, only when the standard tags are missing. Negative industry averages are compared in percentage points. Provider multiples fill in when the filing-based one cannot be computed.
 - Some `n/a` are real: Apple does not tag interest expense, banks have no gross margin, some telecom and media filers report no cost of revenue.

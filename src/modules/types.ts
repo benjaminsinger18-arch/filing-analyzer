@@ -15,6 +15,8 @@ export type Metric = {
   /** Why value is null, or a short caveat. */
   reason?: string
   hint?: string
+  /** 'provider' when the value was filled from a data provider because the filing could not produce it. */
+  source?: 'provider'
   /** Present on industry-comparison rows. */
   compare?: Comparison
 }

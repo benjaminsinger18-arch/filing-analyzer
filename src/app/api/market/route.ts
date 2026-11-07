@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { MarketData, MarketRatios } from '@/lib/financials'
-import { mapFinnhubMetrics, toNum } from '@/lib/market'
+import { mapFinnhubFundamentals, mapFinnhubMetrics, toNum } from '@/lib/market'
 
 /** Alpha Vantage GLOBAL_QUOTE: official latest-close price (free tier: 1 request/second, 25/day). */
 async function alphaVantagePrice(ticker: string, key: string): Promise<{ price: number; asOf: string | null } | null> {
@@ -35,7 +35,7 @@ async function yahooPrice(ticker: string): Promise<{ price: number; asOf: string
 }
 
 /** Finnhub basic financials (free key, 60 calls/minute): provider-reported market ratios. */
-async function finnhubRatios(ticker: string, key: string): Promise<{ ratios: MarketRatios } | { note: string }> {
+async function finnhubRatios(ticker: string, key: string): Promise<{ ratios: MarketRatios; fundamentals: Record<string, number> } | { note: string }> {
   const res = await fetch(
     `https://finnhub.io/api/v1/stock/metric?symbol=${encodeURIComponent(ticker)}&metric=all&token=${encodeURIComponent(key)}`,
     { next: { revalidate: 300 } },
@@ -45,8 +45,9 @@ async function finnhubRatios(ticker: string, key: string): Promise<{ ratios: Mar
   if (!res.ok) return { note: 'Finnhub is unavailable; provider ratios unavailable.' }
   const body = (await res.json()) as { metric?: Record<string, unknown> }
   const ratios = body.metric ? mapFinnhubMetrics(body.metric) : {}
-  if (Object.keys(ratios).length === 0) return { note: 'No provider ratios found for this ticker.' }
-  return { ratios }
+  const fundamentals = body.metric ? mapFinnhubFundamentals(body.metric) : {}
+  if (Object.keys(ratios).length === 0 && Object.keys(fundamentals).length === 0) return { note: 'No provider ratios found for this ticker.' }
+  return { ratios, fundamentals }
 }
 
 /**
@@ -85,6 +86,7 @@ export async function GET(req: Request) {
       priceAsOf,
       source,
       ratios: 'ratios' in fh ? fh.ratios : {},
+      fundamentals: 'fundamentals' in fh ? fh.fundamentals : undefined,
       ratiosNote: 'note' in fh ? fh.note : undefined,
     }
     return NextResponse.json(data)

@@ -23,6 +23,11 @@ export const FLOW_TAGS: Partial<Record<LineItem, string[]>> = {
   // InterestPaid* (cash-flow supplemental) is a last-resort approximation of interest expense.
   interestExpense: ['InterestExpense', 'InterestExpenseDebt', 'InterestExpenseNonoperating', 'InterestAndDebtExpense', 'FinancingInterestExpense', 'InterestPaidNet', 'InterestPaid'],
   dilutedShares: ['WeightedAverageNumberOfDilutedSharesOutstanding'],
+  // Banking
+  netInterestIncome: ['InterestIncomeExpenseNet'],
+  nonInterestIncome: ['NoninterestIncome'],
+  nonInterestExpense: ['NoninterestExpense'],
+  provision: ['ProvisionForLoanLeaseAndOtherLosses', 'ProvisionForCreditLosses', 'ProvisionForLoanAndLeaseLosses'],
 }
 
 /** Cash-flow items only exist as year-to-date figures. */
@@ -45,6 +50,8 @@ export const STOCK_TAGS: Partial<Record<LineItem, string[]>> = {
   payables: ['AccountsPayableCurrent', 'AccountsPayableTradeCurrent', 'AccountsPayableAndAccruedLiabilitiesCurrent'],
   equity: ['StockholdersEquity', 'StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest'],
   retainedEarnings: ['RetainedEarningsAccumulatedDeficit'],
+  deposits: ['Deposits'],
+  loans: ['LoansAndLeasesReceivableNetReportedAmount', 'LoansAndLeasesReceivableNetOfDeferredIncome', 'ext:LoansAndLeasesReceivableNetOfDeferredIncome'],
 }
 
 type Entry = { period: Period; value: number }
@@ -246,6 +253,18 @@ export function normalize(parsed: ParsedFiling, sourceUrl?: string): Financials 
 
   if (!bsCur.assets && !cur.revenue && !cur.netIncome) {
     throw new NotIxbrlError('No recognizable US GAAP financial data found in this filing.')
+  }
+
+  // Banks: operating income, interest coverage and debt ratios built for industrial companies are
+  // misleading (interest is the business, borrowings are only part of funding), so drop the
+  // approximations and leave those ratios to the banking module.
+  if (cur.netInterestIncome && cur.nonInterestExpense && !cur.grossProfit) {
+    for (const set of [cur, prior, ytd, ytdPrior]) {
+      if (set.operatingIncome?.tag.startsWith('derived')) delete set.operatingIncome
+      delete set.interestExpense
+    }
+    delete bsCur.debt
+    delete bsPrior.debt
   }
 
   const cover = parsed.cover
