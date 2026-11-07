@@ -17,45 +17,45 @@ export const notes: AnalysisModule = {
     const add = (tone: Note['tone'], text: string) => out.push({ tone, text })
 
     if (!fin.bsCur.currentAssets && !fin.cur.grossProfit) {
-      add('info', 'Bank/insurer-style filing: liquidity, margin and turnover ratios are n/a, debt may be incomplete; treat the rating with caution.')
+      add('info', 'Bank or insurer filing: several ratios are n/a and debt may be incomplete. Treat the rating with caution.')
     }
 
     const om = m('operating-margin')
     if (om !== null) {
-      if (om < 0) add('watch', `Operating margin is ${pct(om)}: the company reported an operating loss in this period.`)
-      else if (om >= 0.2) add('good', `Operating margin of ${pct(om)} is high; this could reflect pricing power or a capital-light model.`)
+      if (om < 0) add('watch', `Operating loss: margin ${pct(om)}.`)
+      else if (om >= 0.2) add('good', `Operating margin ${pct(om)}.`)
     }
     const rg = m('rev-growth')
     if (rg !== null) {
-      if (rg < 0) add('watch', `Revenue fell ${pct(Math.abs(rg))} versus the comparison period.`)
-      else if (rg >= 0.15) add('good', `Revenue grew ${pct(rg)}, well above a typical mature-company pace.`)
+      if (rg < 0) add('watch', `Revenue down ${pct(Math.abs(rg))} vs. the comparison period.`)
+      else if (rg >= 0.15) add('good', `Revenue up ${pct(rg)}.`)
     }
     const gm = m('gross-margin')
     const oi = m('oi-growth')
     if (rg !== null && oi !== null && rg > 0 && oi < 0) {
-      add('watch', 'Operating income fell while revenue grew, which is consistent with rising costs or investment outrunning sales.')
+      add('watch', 'Operating income fell while revenue grew.')
     }
-    if (gm !== null && gm < 0.2) add('info', `Gross margin of ${pct(gm)} is thin; small cost changes could move profit materially.`)
+    if (gm !== null && gm < 0.2) add('info', `Gross margin ${pct(gm)}, under 20%.`)
 
     const cr = m('current-ratio')
-    if (cr !== null && cr < 1) add('watch', `Current ratio is ${cr.toFixed(2)}: current liabilities exceed current assets, which may matter for near-term funding.`)
+    if (cr !== null && cr < 1) add('watch', `Current ratio ${cr.toFixed(2)}: current liabilities exceed current assets.`)
     const ic = m('interest-coverage')
-    if (ic !== null && ic < 2) add('watch', `Interest coverage of ${ic.toFixed(1)}x leaves a thin cushion if earnings fall.`)
+    if (ic !== null && ic < 2) add('watch', `Interest coverage ${ic.toFixed(1)}x, under 2x.`)
     const lev = m('liabilities-assets')
-    if (lev !== null && lev > 0.8) add('watch', `Liabilities are ${pct(lev)} of assets; high balance-sheet leverage.`)
+    if (lev !== null && lev > 0.8) add('watch', `Liabilities are ${pct(lev)} of assets.`)
     const de = m('debt-ebitda')
-    if (de !== null && de > 4) add('watch', `Debt is ${de.toFixed(1)}x EBITDA, above a level many lenders treat as elevated.`)
+    if (de !== null && de > 4) add('watch', `Debt is ${de.toFixed(1)}x EBITDA, over 4x.`)
 
     const oc = m('ocf-ni')
-    if (oc !== null && oc < 0.8) add('watch', `Operating cash flow is only ${oc.toFixed(2)}x net income; earnings may not be fully backed by cash.`)
-    else if (oc !== null && oc > 1.2) add('good', `Operating cash flow is ${oc.toFixed(2)}x net income, a sign of cash-backed earnings.`)
+    if (oc !== null && oc < 0.8) add('watch', `Operating cash flow is ${oc.toFixed(2)}x net income, under 0.8x.`)
+    else if (oc !== null && oc > 1.2) add('good', `Operating cash flow is ${oc.toFixed(2)}x net income.`)
     const fm = m('fcf-margin')
     if (fm !== null && fm < 0) add('watch', `Free cash flow is negative (${pct(fm)} of revenue).`)
 
     const dso = m('dso')
     if (dso !== null && dso > 90) add('info', `Receivables take about ${Math.round(dso)} days to collect.`)
 
-    if (out.length === 0) add('info', 'No rule-based flags were triggered from the data available in this filing.')
+    if (out.length === 0) add('info', 'No flags triggered.')
     return { id: 'notes', title: 'Observations', metrics: [], notes: out }
   },
 }

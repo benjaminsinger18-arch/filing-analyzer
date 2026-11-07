@@ -19,29 +19,30 @@ const industry: IndustryBenchmark = {
 const metricOf = (r: ReturnType<typeof runModules>, id: string) => r.industry.metrics.find((m) => m.id === id)!
 
 describe('compare', () => {
-  it('flags Above/At/Below with a 10% tolerance', () => {
+  it('flags Above/At/Below with a 5% tolerance', () => {
     expect(compare(1.2, 1, 'higher', false).flag).toBe('Above')
-    expect(compare(1.05, 1, 'higher', false).flag).toBe('At')
+    expect(compare(1.04, 1, 'higher', false).flag).toBe('At')
+    expect(compare(1.08, 1, 'higher', false).flag).toBe('Above')
     expect(compare(0.8, 1, 'higher', false).flag).toBe('Below')
   })
-  it('reads Favorable/Unfavorable by direction and Neutral for multiples', () => {
+  it('reads Favorable/Unfavorable by direction; On par is the only neutral read', () => {
     expect(compare(1.2, 1, 'higher', false).read).toBe('Favorable')
     expect(compare(1.2, 1, 'lower', false).read).toBe('Unfavorable')
     expect(compare(0.8, 1, 'lower', false).read).toBe('Favorable')
-    expect(compare(1.2, 1, 'neutral', false).read).toBe('Neutral')
     expect(compare(1.02, 1, 'higher', false).read).toBe('On par')
+    expect(compare(1.02, 1, 'lower', false).read).toBe('On par')
   })
   it('compares percent metrics in percentage points when the benchmark is negative', () => {
     const r = compare(1.18, -0.002, 'higher', true)
     expect(r.deltaPct).toBeNull()
     expect(r.deltaPts).toBeCloseTo(1.182)
     expect(r).toMatchObject({ flag: 'Above', read: 'Favorable' })
-    expect(r.note).toMatch(/negative/)
-    expect(compare(-0.01, -0.02, 'higher', true).flag).toBe('At') // 1 point apart: within the 2-point floor
+    expect(r.note).toMatch(/Negative/)
+    expect(compare(-0.015, -0.02, 'higher', true).flag).toBe('At') // half a point apart: within the 1-point floor
   })
   it('gives n/a with a reason for a non-positive multiple or a missing benchmark', () => {
-    expect(compare(20, -5, 'neutral', false)).toMatchObject({ flag: 'n/a', note: expect.stringMatching(/not meaningful/) })
-    expect(compare(20, null, 'neutral', false)).toMatchObject({ flag: 'n/a', note: 'No benchmark figure' })
+    expect(compare(20, -5, 'lower', false)).toMatchObject({ flag: 'n/a', note: expect.stringMatching(/not meaningful/) })
+    expect(compare(20, null, 'lower', false)).toMatchObject({ flag: 'n/a', note: 'No benchmark figure' })
   })
 })
 
@@ -65,7 +66,9 @@ describe('industry module', () => {
     expect(metricOf(noPrice, 'ind-pe').reason).toMatch(/share price/)
     const cheaper = { ...industry, values: { ...industry.values, pe: 10 } }
     const priced = runModules({ ...fin(), industry: cheaper, price: 30 })
-    expect(metricOf(priced, 'ind-pe').compare).toMatchObject({ flag: 'Above', read: 'Neutral' }) // P/E 20 vs 10
+    expect(metricOf(priced, 'ind-pe').compare).toMatchObject({ flag: 'Above', read: 'Unfavorable' }) // P/E 20 vs 10: higher multiple reads Unfavorable
+    const dearer = { ...industry, values: { ...industry.values, pe: 40 } }
+    expect(metricOf(runModules({ ...fin(), industry: dearer, price: 30 }), 'ind-pe').compare).toMatchObject({ flag: 'Below', read: 'Favorable' }) // 20 vs 40: lower reads Favorable
     expect(metricOf(runModules({ ...fin(), industry, price: 30 }), 'ind-pe').compare?.read).toBe('On par') // 20 vs 20
   })
   it('shows percentage points instead of a blank row for a negative industry ROE', () => {

@@ -26,7 +26,7 @@ export type CompareResult = {
   /** Difference in percentage points, for percent metrics. */
   deltaPts: number | null
   flag: 'Above' | 'At' | 'Below' | 'n/a'
-  read: 'Favorable' | 'Unfavorable' | 'On par' | 'Neutral' | 'n/a'
+  read: 'Favorable' | 'Unfavorable' | 'On par' | 'n/a'
   /** Why no comparison could be made, or a caveat (e.g. negative industry average). */
   note?: string
 }

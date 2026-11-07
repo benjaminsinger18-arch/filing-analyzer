@@ -28,7 +28,7 @@ export const market: AnalysisModule = {
         id: 'market',
         title: 'Market ratios (provider)',
         metrics: [],
-        notes: [{ tone: 'info', text: 'Click Fetch latest to load provider ratios.' }],
+        notes: [{ tone: 'info', text: 'Click Fetch latest.' }],
       }
     }
     const all = Object.values(prior).flatMap((r: ModuleResult) => r.metrics)
@@ -54,7 +54,7 @@ export const market: AnalysisModule = {
       if (computed !== null && computed > 0 && Math.abs(provider / computed - 1) > 0.25) {
         notes.push({
           tone: 'info',
-          text: `${row.label}: provider ${provider.toFixed(1)}x vs ${computed.toFixed(1)}x from the filing. Providers use trailing-twelve-month figures and their own share counts; this app uses the filing period${fin.basis === 'quarter' ? ' (quarter x4)' : ''}.`,
+          text: `${row.label}: provider ${provider.toFixed(1)}x vs ${computed.toFixed(1)}x from the filing. The provider uses trailing twelve months${fin.basis === 'quarter' ? '; the filing figure is the quarter x4' : ''}.`,
         })
       }
     }
