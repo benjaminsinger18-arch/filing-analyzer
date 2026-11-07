@@ -19,7 +19,7 @@ Drop in an SEC 10-K or 10-Q and get financial ratios, quality scores, rule-based
 | Growth | YoY revenue, operating income, net income, EPS |
 | Cash-flow quality | OCF/net income, free cash flow, FCF margin, accruals ratio |
 | Quality & distress | Piotroski F-score, Altman Z''-score |
-| Industry comparison | company vs. Damodaran US industry averages: margins, ROE, debt/capital, coverage, P/E, P/B, EV/EBITDA, EV/sales, with Above/At/Below flags (+/-10%) |
+| Industry comparison | company vs. Damodaran US industry averages: margins, ROE, debt/capital, coverage, P/E, P/B, EV/EBITDA, EV/sales, with Above/At/Below flags (+/-5%) and direction-aware colors (lower is favorable for debt and multiples) |
 | Market ratios (provider) | Finnhub-reported P/E, PEG, EV/EBITDA, EV/revenue, P/B, beta, dividend yield beside the filing-based ones; needs a free `FINNHUB_API_KEY` |
 | Valuation (optional) | P/E, P/B, market cap, EV/EBITDA, FCF yield; needs a share price (type one or click Fetch latest) |
 | Screening rating | weighted composite using the published rubric in `src/modules/rating.ts` |
@@ -44,17 +44,18 @@ Environment (`.env.local`, all optional except for the feature they enable):
 
 ### Industry data
 
-`src/data/industry-*.json` is generated from Aswath Damodaran's US industry datasets (NYU Stern, January 2026): https://pages.stern.nyu.edu/~adamodar/New_Home_Page/data.html (acknowledgement requested). Refresh once a year with `npm run bench:build`. A ticker maps to an industry through Damodaran's company list; if none matches, pick an industry from the dropdown in the header.
+`src/data/industry-*.json` comes from Aswath Damodaran's US industry datasets (NYU Stern, January 2026): https://pages.stern.nyu.edu/~adamodar/New_Home_Page/data.html. Refresh yearly with `npm run bench:build`. Tickers map to industries through his company list; pick one from the header dropdown when none matches.
 
 ## Limits
 
-- US GAAP inline-XBRL filings only (roughly 2019 onward). PDFs and older filings are not supported.
-- Banks, insurers and other filers without a classified balance sheet will show `n/a` for several ratios; Altman Z'' is unreliable for them.
-- Total debt sums the debt tags a company reports; check the trace for what was included.
-- A single filing cannot show trends beyond one comparison period.
-- "Fetch latest" fetches the price (Alpha Vantage, else Yahoo) and, with a Finnhub key, provider ratios. It is on demand to protect free-tier quotas. The price date is shown next to valuation and usually differs from the filing period.
-- The Modules menu only shows or hides ratio sections; every module always runs, so industry, market, rating and observations never depend on it.
-- Gaps are filled where the data allows: interest paid stands in for interest expense (and operating income is derived from pre-tax income plus interest) only when the standard tags are absent; a negative industry average is compared in percentage points; a total-market average is shown next to every industry average; provider multiples fill in when the filing-based one cannot be computed. Some `n/a` remain legitimately (e.g. Apple does not tag interest expense, banks have no gross margin or current ratio, some telecoms and media companies report no cost of revenue).
-- Registrants that reorganized under a new CIK (e.g. ExxonMobil Holdings) may have no 10-K under the new CIK; the lookup says so, and you can upload the predecessor's filing.
-- Industry figures are annual aggregates from January 2026, not medians, on Damodaran definitions (e.g. pre-tax unadjusted operating margin, positive-EBITDA EV/EBITDA); US-listed firms only. They are not the same period as the filing.
-- Alpha Vantage's company-overview endpoint is premium-only, which is why ratios come from Finnhub.
+- US GAAP inline-XBRL filings, about 2019 onward. No PDFs or older filings.
+- Banks and insurers show `n/a` for several ratios; Altman Z'' is unreliable for them.
+- Total debt sums the reported debt tags; the trace lists them.
+- One filing gives one comparison period, so no trends.
+- Fetch latest runs on demand to protect free-tier quotas. The price date usually differs from the filing period.
+- The Modules menu only shows or hides ratio sections. Every module always runs.
+- Fallbacks: interest paid stands in for interest expense, and operating income is derived from pre-tax income plus interest, only when the standard tags are missing. Negative industry averages are compared in percentage points. Provider multiples fill in when the filing-based one cannot be computed.
+- Some `n/a` are real: Apple does not tag interest expense, banks have no gross margin, some telecom and media filers report no cost of revenue.
+- A registrant that reorganized under a new CIK (ExxonMobil Holdings) may have no 10-K there. Upload the predecessor's filing.
+- Industry figures are January 2026 aggregates, not medians, on Damodaran definitions, for US-listed firms.
+- Alpha Vantage's company overview is premium-only, so ratios come from Finnhub.

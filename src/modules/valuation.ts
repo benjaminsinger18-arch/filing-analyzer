@@ -13,7 +13,7 @@ export const valuation: AnalysisModule = {
         id: 'valuation',
         title: 'Valuation',
         metrics: [],
-        notes: [{ tone: 'info', text: 'Enter a share price for valuation.' }],
+        notes: [{ tone: 'info', text: 'Enter a share price.' }],
       }
     }
     const price = { value: fin.price, tag: 'user input' }
@@ -39,7 +39,7 @@ export const valuation: AnalysisModule = {
       id: 'valuation',
       title: 'Valuation',
       notes: [
-        { tone: 'info', text: `Price $${fin.price}${fin.priceAsOf ? ` as of ${fin.priceAsOf}` : ''} against financials for the period ending ${fin.meta.periodEnd}. Uses diluted weighted shares. Not a price target.` },
+        { tone: 'info', text: `Price $${fin.price}${fin.priceAsOf ? ` as of ${fin.priceAsOf}` : ''}; financials for the period ending ${fin.meta.periodEnd}. Not a price target.` },
       ],
       metrics: [
         metric('pe', 'P/E', 'x', `Price / Diluted EPS${fin.basis === 'quarter' ? ' (quarter x4)' : ''}`,

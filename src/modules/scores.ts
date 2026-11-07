@@ -70,7 +70,7 @@ export const scores: AnalysisModule = {
       const z = altman.value
       notes.push({
         tone: z > 2.6 ? 'good' : z >= 1.1 ? 'info' : 'watch',
-        text: `Altman Z'' of ${z.toFixed(2)} falls in the ${z > 2.6 ? 'safe' : z >= 1.1 ? 'grey' : 'distress'} zone of this model.`,
+        text: `Altman Z'' ${z.toFixed(2)}: ${z > 2.6 ? 'safe' : z >= 1.1 ? 'grey' : 'distress'} zone.`,
       })
     }
 
@@ -93,7 +93,7 @@ export const scores: AnalysisModule = {
         const failed = p.tests.filter((t) => t.pass === false).map((t) => t.name.toLowerCase())
         notes.push({
           tone: p.score >= 7 ? 'good' : p.score >= 4 ? 'info' : 'watch',
-          text: `Piotroski F-score is ${p.score} of 9${failed.length ? `; tests not passed: ${failed.join(', ')}` : ''}.`,
+          text: `Piotroski F-score ${p.score} of 9${failed.length ? `; failed: ${failed.join(', ')}` : ''}.`,
         })
       }
     }

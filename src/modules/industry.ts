@@ -1,7 +1,8 @@
 import type { AnalysisModule, CompareResult, Metric, ModuleResult, Note, Unit } from './types'
 import type { MarketRatios } from '@/lib/financials'
 
-type Direction = 'higher' | 'lower' | 'neutral'
+/** Which side of the benchmark is favorable. Valuation multiples: a lower multiple than the average reads Favorable (cheaper). */
+type Direction = 'higher' | 'lower'
 
 type Spec = {
   id: string
@@ -25,19 +26,20 @@ const SPECS: Spec[] = [
   { id: 'ind-debt-capital', label: 'Debt / capital (book)', unit: '%', source: 'debt-capital', key: 'bookDebtToCapital', direction: 'lower', formula: 'Debt / (debt + equity), book values' },
   { id: 'ind-interest-coverage', label: 'Interest coverage', unit: 'x', source: 'interest-coverage', key: 'interestCoverage', direction: 'higher', formula: 'Operating income / interest expense' },
   { id: 'ind-debt-ebitda', label: 'Debt / EBITDA', unit: 'x', source: 'debt-ebitda', key: 'debtToEbitda', direction: 'lower', formula: 'Total debt / EBITDA' },
-  { id: 'ind-pe', label: 'P/E', unit: 'x', source: 'pe', key: 'pe', direction: 'neutral', formula: 'Price / diluted EPS vs. industry current P/E', provider: 'pe' },
-  { id: 'ind-pb', label: 'P/B', unit: 'x', source: 'pb', key: 'pb', direction: 'neutral', formula: 'Market cap / equity', provider: 'pb' },
-  { id: 'ind-ev-ebitda', label: 'EV / EBITDA', unit: 'x', source: 'ev-ebitda', key: 'evEbitda', direction: 'neutral', formula: 'Positive-EBITDA firms only', provider: 'evEbitda' },
-  { id: 'ind-ev-sales', label: 'EV / sales', unit: 'x', source: 'ev-sales', key: 'evSales', direction: 'neutral', formula: 'Enterprise value / revenue', provider: 'evRevenue' },
+  { id: 'ind-pe', label: 'P/E', unit: 'x', source: 'pe', key: 'pe', direction: 'lower', formula: 'Price / diluted EPS vs. industry current P/E', provider: 'pe' },
+  { id: 'ind-pb', label: 'P/B', unit: 'x', source: 'pb', key: 'pb', direction: 'lower', formula: 'Market cap / equity', provider: 'pb' },
+  { id: 'ind-ev-ebitda', label: 'EV / EBITDA', unit: 'x', source: 'ev-ebitda', key: 'evEbitda', direction: 'lower', formula: 'Positive-EBITDA firms only', provider: 'evEbitda' },
+  { id: 'ind-ev-sales', label: 'EV / sales', unit: 'x', source: 'ev-sales', key: 'evSales', direction: 'lower', formula: 'Enterprise value / revenue', provider: 'evRevenue' },
 ]
 
-const TOLERANCE = 0.1
+/** 'On par' (the only neutral read) means within 5% of the benchmark. */
+const TOLERANCE = 0.05
 /** For percent metrics against a non-positive benchmark: flag by points, at least this many. */
-const MIN_POINTS = 0.02
+const MIN_POINTS = 0.01
 
 /**
  * Compares a company value with a benchmark. Never returns a blank row for a usable benchmark:
- * - positive benchmark: relative difference with a +/-10% band
+ * - positive benchmark: relative difference with a +/-5% band
  * - non-positive benchmark on a percent metric: difference in percentage points
  * - non-positive benchmark on a multiple: n/a with a reason
  */
@@ -55,12 +57,12 @@ export function compare(company: number, benchmark: number | null, direction: Di
   } else if (isPct) {
     const band = Math.max(MIN_POINTS, TOLERANCE * Math.abs(benchmark))
     flag = Math.abs(deltaPts!) <= band ? 'At' : deltaPts! > 0 ? 'Above' : 'Below'
-    note = 'Benchmark is negative; compared in percentage points'
+    note = 'Negative average; compared in percentage points'
   } else {
-    return { benchmark, deltaPct: null, deltaPts: null, flag: 'n/a', read: 'n/a', note: 'Benchmark not meaningful (non-positive)' }
+    return { benchmark, deltaPct: null, deltaPts: null, flag: 'n/a', read: 'n/a', note: 'Average not meaningful (non-positive)' }
   }
   const read: CompareResult['read'] =
-    flag === 'At' ? 'On par' : direction === 'neutral' ? 'Neutral' : (flag === 'Above') === (direction === 'higher') ? 'Favorable' : 'Unfavorable'
+    flag === 'At' ? 'On par' : (flag === 'Above') === (direction === 'higher') ? 'Favorable' : 'Unfavorable'
   return { benchmark, deltaPct, deltaPts, flag, read, note }
 }
 
@@ -76,7 +78,7 @@ export const industry: AnalysisModule = {
         id: 'industry',
         title: 'Industry comparison',
         metrics: [],
-        notes: [{ tone: 'info', text: 'No industry matched. Pick one to compare.' }],
+        notes: [{ tone: 'info', text: 'No industry matched. Pick one.' }],
       }
     }
     const all = Object.values(prior).flatMap((r: ModuleResult) => r.metrics)
@@ -124,19 +126,19 @@ export const industry: AnalysisModule = {
       }
     })
 
-    const directional = metrics.filter((m) => m.compare && m.compare.read !== 'Neutral' && m.compare.read !== 'n/a')
+    const directional = metrics.filter((m) => m.compare && m.compare.read !== 'On par' && m.compare.read !== 'n/a')
     const better = directional.filter((m) => m.compare!.read === 'Favorable').length
     const worse = directional.filter((m) => m.compare!.read === 'Unfavorable').length
     const notes: Note[] = [
       {
         tone: 'info',
         text: directional.length
-          ? `${ind.name} (${ind.firms} firms, ${ind.asOf.slice(0, 7)}): ${better} of ${directional.length} comparable metrics are better than the industry average, ${worse} are worse.`
-          : `${ind.name} (${ind.firms} firms, ${ind.asOf.slice(0, 7)}): no comparable metrics available.`,
+          ? `${ind.name} (${ind.firms} firms, ${ind.asOf.slice(0, 7)}): ${better} of ${directional.length} comparable metrics better than the industry average, ${worse} worse.`
+          : `${ind.name} (${ind.firms} firms, ${ind.asOf.slice(0, 7)}): no comparable metrics.`,
       },
     ]
     if (/bank|insurance|brokerage|financial/i.test(ind.name)) {
-      notes.push({ tone: 'info', text: 'Financial-sector filing: margin, coverage and EBITDA comparisons may not apply.' })
+      notes.push({ tone: 'info', text: 'Financial filer: margin, coverage and EBITDA comparisons may not apply.' })
     }
     return { id: 'industry', title: 'Industry comparison', metrics, notes }
   },

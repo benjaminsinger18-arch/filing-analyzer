@@ -74,6 +74,15 @@ function Tab({ active, onClick, children }: { active: boolean; onClick: () => vo
   )
 }
 
+/** Which direction of change is good for each chart item; 'none' items are not judged. */
+const GOOD_WHEN: Partial<Record<LineItem, 'down' | 'none'>> = { liabilities: 'down', debt: 'down', capex: 'none', da: 'none' }
+
+function changeColor(item: LineItem, cur: number, prior: number): string {
+  const good = GOOD_WHEN[item]
+  if (good === 'none' || cur === prior) return 'var(--accent)'
+  return (cur > prior) === (good !== 'down') ? 'var(--up)' : 'var(--down)'
+}
+
 const CHART_ITEMS: Record<ChartTab, { label: string; items: LineItem[] }> = {
   income: { label: 'Income', items: ['revenue', 'grossProfit', 'operatingIncome', 'netIncome'] },
   balance: { label: 'Balance sheet', items: ['assets', 'liabilities', 'equity', 'cash', 'debt'] },
@@ -91,6 +100,7 @@ function FundamentalsChart({ fin, tab }: { fin: Financials; tab: ChartTab }) {
   const rows = CHART_ITEMS[tab].items
     .filter((i) => src.cur[i] || src.prior[i])
     .map((i) => ({
+      item: i,
       name: LINE_ITEM_LABELS[i],
       cur: src.cur[i]?.value ?? 0,
       prior: src.prior[i]?.value ?? 0,
@@ -116,7 +126,7 @@ function FundamentalsChart({ fin, tab }: { fin: Financials; tab: ChartTab }) {
                   <p className="font-semibold">{p.name}</p>
                   <p className="num">{src.curLabel}: {p.has ? compactUsd(p.cur) : 'n/a'}</p>
                   <p className="num text-(--muted)">{src.priorLabel}: {p.hasPrior ? compactUsd(p.prior) : 'n/a'}</p>
-                  {chg !== null ? <p className={cn('num', chg >= 0 ? 'text-(--up)' : 'text-(--down)')}>{chg >= 0 ? '+' : ''}{(chg * 100).toFixed(1)}%</p> : null}
+                  {chg !== null ? <p className="num" style={{ color: changeColor(p.item, p.cur, p.prior) }}>{chg >= 0 ? '+' : ''}{(chg * 100).toFixed(1)}%</p> : null}
                 </div>
               )
             }}
@@ -124,7 +134,7 @@ function FundamentalsChart({ fin, tab }: { fin: Financials; tab: ChartTab }) {
           <Bar dataKey="prior" fill="var(--line)" radius={[3, 3, 0, 0]} maxBarSize={36} />
           <Bar dataKey="cur" radius={[3, 3, 0, 0]} maxBarSize={36}>
             {rows.map((r) => (
-              <Cell key={r.name} fill={r.cur >= r.prior ? 'var(--up)' : 'var(--down)'} />
+              <Cell key={r.name} fill={changeColor(r.item, r.cur, r.prior)} />
             ))}
           </Bar>
         </BarChart>
@@ -258,7 +268,6 @@ const readTone: Record<string, string> = {
   Favorable: 'text-(--up)',
   Unfavorable: 'text-(--down)',
   'On par': 'text-(--accent)',
-  Neutral: 'text-(--muted)',
   'n/a': 'text-(--muted)',
 }
 
@@ -268,10 +277,8 @@ function deltaText(c: { deltaPct: number | null; deltaPts: number | null }) {
   return '-'
 }
 
-const deltaTone = (c: { deltaPct: number | null; deltaPts: number | null }) => {
-  const d = c.deltaPct ?? c.deltaPts
-  return d === null ? 'text-(--muted)' : d >= 0 ? 'text-(--up)' : 'text-(--down)'
-}
+/** Green = favorable side, red = unfavorable side, cyan = on par. Never the raw sign of the difference. */
+const deltaTone = (c: { read: string }) => readTone[c.read] ?? 'text-(--muted)'
 
 function IndustryTable({ result }: { result?: ModuleResult }) {
   if (!result) return <p className="p-4 text-xs text-(--muted)">No data.</p>
@@ -323,7 +330,7 @@ function IndustryTable({ result }: { result?: ModuleResult }) {
       ) : null}
       <ul>{result.notes.map((n, i) => <NoteRow key={i} n={n} />)}</ul>
       <p className="px-3 py-2 text-[11px] text-(--muted)">
-        Damodaran US aggregates (not medians), Jan 2026; definitions differ slightly. Flag: Above/Below outside +/-10% (percentage points when the average is negative, marked *). Multiples are Above/Below only. Market avg: total US market (ex-financials unless a financial industry).
+        Damodaran US aggregates (not medians), Jan 2026. Flag: Above/Below outside +/-5%; * = percentage points (negative average). Green = favorable, red = unfavorable: higher is better for margins, returns and coverage; lower is better for debt and multiples (below average = cheaper). Market avg: total US market.
       </p>
     </div>
   )
