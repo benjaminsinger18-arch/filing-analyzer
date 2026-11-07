@@ -42,4 +42,4 @@ npm test
 - Banks, insurers and other filers without a classified balance sheet will show `n/a` for several ratios; Altman Z'' is unreliable for them.
 - Total debt sums the debt tags a company reports; check the trace for what was included.
 - A single filing cannot show trends beyond one comparison period.
-- "Fetch latest" uses Yahoo Finance's unofficial chart endpoint (no key). It can be delayed, rate-limited or change without notice; the price date is shown next to valuation. The price date usually differs from the filing period.
+- "Fetch latest" uses Alpha Vantage when `ALPHAVANTAGE_API_KEY` is set in `.env.local` (free tier: 25 requests/day, latest daily close) and falls back to Yahoo Finance's unofficial endpoint otherwise or when rate-limited. The price date is shown next to valuation and usually differs from the filing period.
