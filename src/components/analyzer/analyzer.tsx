@@ -385,6 +385,13 @@ export function Analyzer() {
     })
   }
 
+  const enableAllModules = () => {
+    setEnabled(new Set(RATIO_MODULES.map((m) => m.id)))
+    try {
+      localStorage.removeItem(STORAGE_KEY)
+    } catch {}
+  }
+
   const toggleTheme = () => {
     setDark((d) => {
       try {
@@ -413,8 +420,13 @@ export function Analyzer() {
 
   const present = (f: Financials) => {
     setFin(f)
-    setMarket(null)
-    setPrice('')
+    // Keep a price already fetched for this ticker; otherwise fetch one so valuation works right away.
+    if (!f.meta.ticker || market?.ticker !== f.meta.ticker.toUpperCase()) {
+      setMarket(null)
+      setPrice('')
+      setPriceNote(null)
+      if (f.meta.ticker) void fetchMarket(f.meta.ticker)
+    }
     void loadIndustry(f.meta.ticker ? `ticker=${encodeURIComponent(f.meta.ticker)}` : '')
     setHistory((h) =>
       [f, ...h.filter((x) => !(x.meta.name === f.meta.name && x.meta.form === f.meta.form && x.meta.periodEnd === f.meta.periodEnd))]
@@ -460,8 +472,8 @@ export function Analyzer() {
     }
   }
 
-  async function fetchMarket() {
-    const sym = (fin?.meta.ticker ?? ticker).trim()
+  async function fetchMarket(symbol?: string) {
+    const sym = (symbol ?? fin?.meta.ticker ?? ticker).trim()
     if (!sym) return setPriceNote('Enter a ticker or load a filing first.')
     setPriceNote('Fetching...')
     try {
@@ -522,6 +534,7 @@ export function Analyzer() {
               <SlidersHorizontal className="size-3.5" /> Modules
             </summary>
             <div className="absolute right-0 z-20 mt-1 flex w-72 flex-col gap-0.5 rounded-md border border-(--line) bg-(--panel) p-2 shadow-xl">
+              <button type="button" onClick={enableAllModules} className="mb-1 self-end rounded px-2 py-0.5 text-[11px] text-(--accent) hover:bg-(--panel-2)">Enable all</button>
               {RATIO_MODULES.map((m) => (
                 <label key={m.id} className="flex cursor-pointer items-start gap-2 rounded px-2 py-1.5 hover:bg-(--panel-2)">
                   <input type="checkbox" className="mt-0.5" checked={enabled.has(m.id)} onChange={() => toggleModule(m.id)} />

@@ -26,7 +26,8 @@ export const FLOW_TAGS: Partial<Record<LineItem, string[]>> = {
 
 /** Cash-flow items only exist as year-to-date figures. */
 export const CASHFLOW_TAGS: Partial<Record<LineItem, string[]>> = {
-  da: ['DepreciationDepletionAndAmortization', 'DepreciationAndAmortization', 'DepreciationAmortizationAndAccretionNet'],
+  // 'ext:' tags are company-specific extensions (e.g. msft:DepreciationAmortizationAndOther), used only as a fallback.
+  da: ['DepreciationDepletionAndAmortization', 'DepreciationAndAmortization', 'DepreciationAmortizationAndAccretionNet', 'ext:DepreciationAmortizationAndOther'],
   ocf: ['NetCashProvidedByUsedInOperatingActivities', 'NetCashProvidedByUsedInOperatingActivitiesContinuingOperations'],
   capex: ['PaymentsToAcquirePropertyPlantAndEquipment', 'PaymentsToAcquireProductiveAssets'],
 }
@@ -55,10 +56,11 @@ class FactIndex {
 
   constructor(parsed: ParsedFiling) {
     for (const f of parsed.facts) {
-      if (!f.name.startsWith('us-gaap:')) continue
+      const [prefix, local] = f.name.split(':')
+      if (!local || ['dei', 'srt', 'ifrs-full'].includes(prefix)) continue
       const ctx = parsed.contexts[f.contextRef]
       if (!ctx || ctx.dimensional) continue
-      const tag = f.name.slice('us-gaap:'.length)
+      const tag = prefix === 'us-gaap' ? local : `ext:${local}`
       const list = this.byTag.get(tag) ?? []
       list.push({ period: ctx.period, value: f.value })
       this.byTag.set(tag, list)

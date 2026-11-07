@@ -61,7 +61,7 @@ describe('industry module', () => {
 })
 
 describe('market module', () => {
-  const market: MarketData = { price: 30, priceAsOf: '2026-11-06', source: 'test', ratios: { pe: 40, beta: 1.1, dividendYield: 0.02 } }
+  const market: MarketData = { ticker: 'TEST', price: 30, priceAsOf: '2026-11-06', source: 'test', ratios: { pe: 40, beta: 1.1, dividendYield: 0.02 } }
   it('lists provider ratios beside filing-based ones and explains big differences', () => {
     const r = runModules({ ...fin(), price: 30, market })
     const pe = r.market.metrics.find((m) => m.id === 'mkt-pe')!
