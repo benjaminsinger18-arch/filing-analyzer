@@ -31,7 +31,7 @@ describe('rankCompanies', () => {
   })
   it('matches a ticker prefix and handles punctuation in names', () => {
     expect(top('am')).toContain('AMZN')
-    expect(top('at&t')[0]).toBe('T')
+    expect(top('at&t')).toEqual(['T'])
     expect(top('alphabet')[0]).toBe('GOOGL')
   })
   it('needs every word of the query to match', () => {

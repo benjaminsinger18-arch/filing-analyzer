@@ -24,10 +24,11 @@ export function rankCompanies(list: Company[], query: string, limit = 8): Compan
     let score = 0
     for (const t of tokens) {
       let s = 0
-      if (tickerL === t) s = 100
+      // Ticker matches only count for a single-word query, so "at&t" does not match every "AT..." ticker.
+      if (tokens.length === 1 && tickerL === t) s = 100
       else if (words.includes(t)) s = 70
-      else if (tickerL.startsWith(t)) s = 60
-      else if (words.some((w) => w.startsWith(t))) s = 50
+      else if (tokens.length === 1 && tickerL.startsWith(t)) s = 60
+      else if (t.length > 1 && words.some((w) => w.startsWith(t))) s = 50 // one-letter words must match exactly
       else if (t.length >= 3 && nameN.includes(t)) s = 20
       if (s === 0) return // every token must match
       score += s
