@@ -110,7 +110,7 @@ function FundamentalsChart({ fin, tab }: { fin: Financials; tab: ChartTab }) {
       has: !!src.cur[i],
       hasPrior: !!src.prior[i],
     }))
-  if (!rows.length) return <p className="p-6 text-(--muted)">No data for this view in the filing.</p>
+  if (!rows.length) return null
   return (
     <div className="min-h-72 flex-1 px-2 pb-2">
       <ResponsiveContainer width="100%" height="100%">
@@ -127,8 +127,8 @@ function FundamentalsChart({ fin, tab }: { fin: Financials; tab: ChartTab }) {
               return (
                 <div className="rounded border border-(--line) bg-(--panel) px-3 py-2 text-xs text-(--fg) shadow-lg">
                   <p className="font-semibold">{p.name}</p>
-                  <p className="num">{src.curLabel}: {p.has ? compactUsd(p.cur) : 'n/a'}</p>
-                  <p className="num text-(--muted)">{src.priorLabel}: {p.hasPrior ? compactUsd(p.prior) : 'n/a'}</p>
+                  {p.has ? <p className="num">{src.curLabel}: {compactUsd(p.cur)}</p> : null}
+                  {p.hasPrior ? <p className="num text-(--muted)">{src.priorLabel}: {compactUsd(p.prior)}</p> : null}
                   {chg !== null ? <p className="num" style={{ color: changeColor(p.item, p.cur, p.prior) }}>{chg >= 0 ? '+' : ''}{(chg * 100).toFixed(1)}%</p> : null}
                 </div>
               )
@@ -148,18 +148,19 @@ function FundamentalsChart({ fin, tab }: { fin: Financials; tab: ChartTab }) {
 
 function StatStrip({ fin }: { fin: Financials }) {
   const src = chartSources(fin, 'income')
-  const items: LineItem[] = ['revenue', 'operatingIncome', 'netIncome', 'epsDiluted']
+  const items = (['revenue', 'operatingIncome', 'netIncome', 'epsDiluted'] as LineItem[]).filter((i) => src.cur[i])
+  if (!items.length) return null
   return (
-    <div className="grid grid-cols-2 gap-px bg-(--line) sm:grid-cols-4">
+    <div className="flex flex-wrap gap-px bg-(--line)">
       {items.map((i) => {
-        const cur = src.cur[i]?.value
+        const cur = src.cur[i]!.value
         const prior = src.prior[i]?.value
-        const chg = cur !== undefined && prior !== undefined && prior > 0 ? (cur - prior) / prior : null
+        const chg = prior !== undefined && prior > 0 ? (cur - prior) / prior : null
         return (
-          <div key={i} className="bg-(--panel) px-3 py-2">
+          <div key={i} className="min-w-40 flex-1 bg-(--panel) px-3 py-2">
             <p className="text-[11px] text-(--muted)">{LINE_ITEM_LABELS[i]}</p>
-            <p className="num text-base font-semibold">{cur === undefined ? 'n/a' : i === 'epsDiluted' ? `$${cur.toFixed(2)}` : compactUsd(cur)}</p>
-            {chg !== null ? <p className={cn('num text-xs', chg >= 0 ? 'text-(--up)' : 'text-(--down)')}>{chg >= 0 ? '+' : ''}{(chg * 100).toFixed(1)}%</p> : <p className="text-xs text-(--muted)">-</p>}
+            <p className="num text-base font-semibold">{i === 'epsDiluted' ? `$${cur.toFixed(2)}` : compactUsd(cur)}</p>
+            {chg !== null ? <p className={cn('num text-xs', chg >= 0 ? 'text-(--up)' : 'text-(--down)')}>{chg >= 0 ? '+' : ''}{(chg * 100).toFixed(1)}%</p> : null}
           </div>
         )
       })}
@@ -190,8 +191,8 @@ function RatioTable({ metrics }: { metrics: { moduleTitle: string; m: Metric }[]
                   <td className="px-3 py-1.5 text-(--muted)">{moduleTitle}</td>
                   <td className="px-3 py-1.5 font-medium">{m.label}</td>
                   <td className={cn('num px-3 py-1.5 text-right', m.value === null && 'text-(--muted)')}>{formatMetric(m)}</td>
-                  <td className={cn('num px-3 py-1.5 text-right', scoreTone(s))}>{s === null ? '-' : Math.round(s)}</td>
-                  <td className="px-3 py-1.5 text-xs text-(--muted)">{m.reason ?? <Formula formula={m.formula} id={m.id} />}</td>
+                  <td className={cn('num px-3 py-1.5 text-right', scoreTone(s))}>{s === null ? '' : Math.round(s)}</td>
+                  <td className="px-3 py-1.5 text-xs text-(--muted)"><Formula formula={m.formula} id={m.id} /></td>
                 </tr>
                 {open === m.id ? (
                   <tr className="border-b border-(--line) bg-(--panel-2)">
@@ -200,18 +201,16 @@ function RatioTable({ metrics }: { metrics: { moduleTitle: string; m: Metric }[]
                       {m.inputs.length ? (
                         <table className="w-full max-w-2xl">
                           <tbody>
-                            {m.inputs.map((i) => (
+                            {m.inputs.filter((i) => !Number.isNaN(i.value)).map((i) => (
                               <tr key={i.label}>
                                 <td className="py-0.5 pr-3">{i.label}</td>
-                                <td className="num py-0.5 pr-3 text-right">{Number.isNaN(i.value) ? 'n/a' : Math.abs(i.value) >= 1e5 ? i.value.toLocaleString('en-US') : i.value}</td>
+                                <td className="num py-0.5 pr-3 text-right">{Math.abs(i.value) >= 1e5 ? i.value.toLocaleString('en-US') : i.value}</td>
                                 <td className="py-0.5 text-(--muted)">{i.tag}</td>
                               </tr>
                             ))}
                           </tbody>
                         </table>
-                      ) : (
-                        <p className="text-(--muted)">{m.reason ?? 'No inputs.'}</p>
-                      )}
+                      ) : null}
                     </td>
                   </tr>
                 ) : null}
@@ -277,60 +276,63 @@ const readTone: Record<string, string> = {
 function deltaText(c: { deltaPct: number | null; deltaPts: number | null }) {
   if (c.deltaPct !== null) return `${c.deltaPct >= 0 ? '+' : ''}${(c.deltaPct * 100).toFixed(0)}%`
   if (c.deltaPts !== null) return `${c.deltaPts >= 0 ? '+' : ''}${(c.deltaPts * 100).toFixed(1)} pts`
-  return '-'
+  return ''
 }
 
 /** Green = favorable side, red = unfavorable side, cyan = on par. Never the raw sign of the difference. */
 const deltaTone = (c: { read: string }) => readTone[c.read] ?? 'text-(--muted)'
 
+/** A row shows only when the company value exists and at least one benchmark can be compared. */
+const industryRowVisible = (m: Metric) => m.value !== null && !!m.compare && (m.compare.flag !== 'n/a' || (!!m.compare.market && m.compare.market.flag !== 'n/a'))
+
 function IndustryTable({ result }: { result?: ModuleResult }) {
-  if (!result) return <p className="p-4 text-xs text-(--muted)">No data.</p>
+  const rows = result?.metrics.filter(industryRowVisible) ?? []
+  if (!result || !rows.length) return null
   const fmt = (m: Metric, v: number) => formatMetric({ ...m, value: v })
   return (
     <div className="flex flex-col">
-      {result.metrics.length ? (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-190 text-left">
-            <thead>
-              <tr className="border-b border-(--line) text-[11px] text-(--muted)">
-                <th className="px-3 py-1.5 font-medium">Metric</th>
-                <th className="px-3 py-1.5 text-right font-medium">Company</th>
-                <th className="px-3 py-1.5 text-right font-medium">Industry avg</th>
-                <th className="px-3 py-1.5 text-right font-medium">vs. industry</th>
-                <th className="px-3 py-1.5 font-medium">Flag</th>
-                <th className="px-3 py-1.5 font-medium">Read</th>
-                <th className="px-3 py-1.5 text-right font-medium">Market avg</th>
-                <th className="px-3 py-1.5 text-right font-medium">vs. market</th>
-              </tr>
-            </thead>
-            <tbody>
-              {result.metrics.map((m) => {
-                const c = m.compare
-                const mk = c?.market
-                const usable = c && c.flag !== 'n/a'
-                return (
-                  <tr key={m.id} className="border-b border-(--line)">
-                    <td className="px-3 py-1.5 font-medium">{m.label}</td>
-                    <td className="num px-3 py-1.5 text-right">
-                      {m.value === null ? <span className="text-(--muted)">n/a</span> : fmt(m, m.value)}
-                      {c?.companySource ? <span className="ml-1 text-[10px] text-(--muted)">({c.companySource})</span> : null}
-                    </td>
-                    <td className="num px-3 py-1.5 text-right">{c && !Number.isNaN(c.benchmark) ? fmt(m, c.benchmark) : '-'}</td>
-                    <td className={cn('num px-3 py-1.5 text-right', c ? deltaTone(c) : 'text-(--muted)')}>{c ? deltaText(c) : '-'}</td>
-                    <td className="px-3 py-1.5">
-                      {usable ? c.flag : <span className="text-(--muted)">{c ? c.note : m.reason}</span>}
-                      {usable && c.note ? <span className="ml-1 text-[10px] text-(--muted)" title={c.note}>*</span> : null}
-                    </td>
-                    <td className={cn('px-3 py-1.5', usable ? readTone[c.read] : '')}>{usable ? c.read : ''}</td>
-                    <td className="num px-3 py-1.5 text-right text-(--muted)">{mk && !Number.isNaN(mk.benchmark) ? fmt(m, mk.benchmark) : '-'}</td>
-                    <td className={cn('num px-3 py-1.5 text-right', mk ? deltaTone(mk) : 'text-(--muted)')}>{mk && mk.flag !== 'n/a' ? deltaText(mk) : '-'}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      ) : null}
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-190 text-left">
+          <thead>
+            <tr className="border-b border-(--line) text-[11px] text-(--muted)">
+              <th className="px-3 py-1.5 font-medium">Metric</th>
+              <th className="px-3 py-1.5 text-right font-medium">Company</th>
+              <th className="px-3 py-1.5 text-right font-medium">Industry avg</th>
+              <th className="px-3 py-1.5 text-right font-medium">vs. industry</th>
+              <th className="px-3 py-1.5 font-medium">Flag</th>
+              <th className="px-3 py-1.5 font-medium">Read</th>
+              <th className="px-3 py-1.5 text-right font-medium">Market avg</th>
+              <th className="px-3 py-1.5 text-right font-medium">vs. market</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((m) => {
+              const c = m.compare!
+              const mk = c.market
+              const own = c.flag !== 'n/a'
+              const mkOk = !!mk && mk.flag !== 'n/a'
+              return (
+                <tr key={m.id} className="border-b border-(--line)">
+                  <td className="px-3 py-1.5 font-medium">{m.label}</td>
+                  <td className="num px-3 py-1.5 text-right">
+                    {fmt(m, m.value!)}
+                    {c.companySource ? <span className="ml-1 text-[10px] text-(--muted)">({c.companySource})</span> : null}
+                  </td>
+                  <td className="num px-3 py-1.5 text-right">{own ? fmt(m, c.benchmark) : ''}</td>
+                  <td className={cn('num px-3 py-1.5 text-right', deltaTone(c))}>{own ? deltaText(c) : ''}</td>
+                  <td className="px-3 py-1.5">
+                    {own ? c.flag : ''}
+                    {own && c.note ? <span className="ml-1 text-[10px] text-(--muted)" title={c.note}>*</span> : null}
+                  </td>
+                  <td className={cn('px-3 py-1.5', own ? readTone[c.read] : '')}>{own ? c.read : ''}</td>
+                  <td className="num px-3 py-1.5 text-right text-(--muted)">{mkOk ? fmt(m, mk!.benchmark) : ''}</td>
+                  <td className={cn('num px-3 py-1.5 text-right', mkOk ? deltaTone(mk!) : '')}>{mkOk ? deltaText(mk!) : ''}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
       <ul>{result.notes.map((n, i) => <NoteRow key={i} n={n} />)}</ul>
       <p className="px-3 py-2 text-[11px] text-(--muted)">
         Damodaran US aggregates (not medians), Jan 2026. Flag: Above/Below outside +/-5%; * = percentage points (negative average). Green = favorable, red = unfavorable: higher is better for margins, returns and coverage; lower is better for debt and multiples (below average = cheaper). Market avg: total US market.
@@ -340,32 +342,30 @@ function IndustryTable({ result }: { result?: ModuleResult }) {
 }
 
 function MarketTable({ result }: { result?: ModuleResult }) {
-  if (!result) return <p className="p-4 text-xs text-(--muted)">No data.</p>
+  if (!result || !result.metrics.length) return null
   return (
     <div className="flex flex-col">
-      {result.metrics.length ? (
-        <table className="w-full text-left">
-          <thead>
-            <tr className="border-b border-(--line) text-[11px] text-(--muted)">
-              <th className="px-3 py-1.5 font-medium">Ratio</th>
-              <th className="px-3 py-1.5 text-right font-medium">Provider</th>
-              <th className="px-3 py-1.5 text-right font-medium">From filing</th>
-            </tr>
-          </thead>
-          <tbody>
-            {result.metrics.map((m) => {
-              const ours = m.inputs.find((i) => i.label === 'Computed from filing')
-              return (
-                <tr key={m.id} className="border-b border-(--line)">
-                  <td className="px-3 py-1.5 font-medium">{m.label}</td>
-                  <td className="num px-3 py-1.5 text-right">{formatMetric(m)}</td>
-                  <td className="num px-3 py-1.5 text-right text-(--muted)">{ours ? formatMetric({ ...m, value: ours.value }) : 'provider only'}</td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      ) : null}
+      <table className="w-full text-left">
+        <thead>
+          <tr className="border-b border-(--line) text-[11px] text-(--muted)">
+            <th className="px-3 py-1.5 font-medium">Ratio</th>
+            <th className="px-3 py-1.5 text-right font-medium">Provider</th>
+            <th className="px-3 py-1.5 text-right font-medium">From filing</th>
+          </tr>
+        </thead>
+        <tbody>
+          {result.metrics.map((m) => {
+            const ours = m.inputs.find((i) => i.label === 'Computed from filing')
+            return (
+              <tr key={m.id} className="border-b border-(--line)">
+                <td className="px-3 py-1.5 font-medium">{m.label}</td>
+                <td className="num px-3 py-1.5 text-right">{formatMetric(m)}</td>
+                <td className="num px-3 py-1.5 text-right text-(--muted)">{ours ? formatMetric({ ...m, value: ours.value }) : ''}</td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
       <ul>{result.notes.map((n, i) => <NoteRow key={i} n={n} />)}</ul>
     </div>
   )
@@ -585,10 +585,14 @@ export function Analyzer() {
   }
 
   const rating = results?.rating?.rating
+  const industryRows = results?.industry?.metrics.filter(industryRowVisible).length ?? 0
+  const marketRows = results?.market?.metrics.length ?? 0
+  const tab: BottomTab = (bottomTab === 'industry' && !industryRows) || (bottomTab === 'market' && !marketRows) ? 'ratios' : bottomTab
   const allMetrics = results
     ? RATIO_MODULES.filter((m) => results[m.id] && enabled.has(m.id) && m.id !== 'industry' && m.id !== 'market').flatMap((m) => results[m.id].metrics.map((metric) => ({ moduleTitle: m.title, m: metric })))
     : []
   const book = allMetrics.filter(({ m }) => m.value !== null)
+  const ratioRows = allMetrics.filter(({ m }) => m.value !== null)
   const ratingOf = (f: Financials) => {
     const r = runModules(f).rating?.rating
     return r?.composite == null ? null : Math.round(r.composite)
@@ -644,11 +648,10 @@ export function Analyzer() {
       <main className="grid grid-cols-1 gap-2 p-2 lg:h-[calc(100svh-4.5rem)] lg:grid-cols-[280px_minmax(0,1fr)_340px] lg:overflow-hidden">
         {/* Left: watchlist + observations */}
         <div className="flex min-h-0 flex-col gap-2 lg:overflow-y-auto">
+          {history.length ? (
           <Panel title="Analyzed" className="shrink-0">
             <div className="max-h-72 overflow-y-auto">
-              {history.length === 0 ? (
-                <p className="px-3 py-4 text-xs text-(--muted)">No filings yet.</p>
-              ) : (
+              {history.length > 0 ? (
                 <table className="w-full text-left">
                   <thead>
                     <tr className="text-[11px] text-(--muted)">
@@ -666,20 +669,23 @@ export function Analyzer() {
                             <span className="block font-semibold">{h.meta.ticker ?? h.meta.name}</span>
                             <span className="block text-[11px] text-(--muted)">{h.meta.form} · {h.meta.periodEnd}</span>
                           </td>
-                          <td className={cn('num px-3 py-1.5 text-right text-sm font-semibold', scoreTone(s))}>{s ?? '-'}</td>
+                          <td className={cn('num px-3 py-1.5 text-right text-sm font-semibold', scoreTone(s))}>{s ?? ''}</td>
                         </tr>
                       )
                     })}
                   </tbody>
                 </table>
-              )}
+              ) : null}
             </div>
           </Panel>
+          ) : null}
+          {results && results.notes.notes.length ? (
           <Panel title="Observations" className="min-h-40 flex-1">
             <ul className="min-h-0 overflow-y-auto">
-              {results ? results.notes.notes.map((n, i) => <NoteRow key={i} n={n} />) : <li className="px-3 py-4 text-xs text-(--muted)">Load a filing.</li>}
+              {results.notes.notes.map((n, i) => <NoteRow key={i} n={n} />)}
             </ul>
           </Panel>
+          ) : null}
         </div>
 
         {/* Center: header, chart, loader, tables */}
@@ -800,8 +806,9 @@ export function Analyzer() {
             {error ? <p className="mx-3 mb-3 rounded bg-(--down-bg) px-3 py-2 text-xs text-(--down)">{error}</p> : null}
           </Panel>
 
+          {fin ? (
           <Panel
-            title={fin ? `${fin.meta.ticker ?? ''} ${fin.meta.name}`.trim() : 'No filing loaded'}
+            title={`${fin.meta.ticker ?? ''} ${fin.meta.name}`.trim()}
             right={
               fin ? (
                 <div className="flex items-center gap-2 text-[11px] text-(--muted)">
@@ -837,40 +844,40 @@ export function Analyzer() {
                 </div>
                 <FundamentalsChart fin={fin} tab={chartTab} />
               </>
-            ) : (
-              <p className="flex flex-1 items-center justify-center px-4 py-16 text-center text-sm text-(--muted)">Load a filing above.</p>
-            )}
+            ) : null}
           </Panel>
+          ) : null}
 
         </div>
 
         {/* Right: rating + ratio book */}
         <div className="flex min-h-0 flex-col gap-2 lg:overflow-y-auto">
+          {rating && rating.composite !== null ? (
           <Panel title="Screening rating" className="shrink-0">
             {rating ? (
               <div className="flex flex-col gap-3 p-3">
                 <div className="flex items-end justify-between">
                   <div>
-                    <p className={cn('num text-4xl leading-none font-bold', scoreTone(rating.composite))}>{rating.composite === null ? '-' : Math.round(rating.composite)}</p>
+                    <p className={cn('num text-4xl leading-none font-bold', scoreTone(rating.composite))}>{Math.round(rating.composite)}</p>
                     <p className="mt-1 text-[11px] text-(--muted)">{rating.used}/{rating.total} categories</p>
                   </div>
                   <Chip className={cn('text-sm', tierTone[rating.tier])}>{rating.tier}</Chip>
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  {rating.categories.map((c) => (
+                  {rating.categories.filter((c) => c.score !== null).map((c) => (
                     <div key={c.id} title={c.basis.join('\n')} className="relative flex items-center justify-between overflow-hidden rounded px-2 py-1">
                       <span className="absolute inset-y-0 left-0" style={{ width: `${c.score ?? 0}%`, background: c.score === null ? 'transparent' : scoreDepth(c.score) }} />
                       <span className="relative text-xs">{c.label}</span>
-                      <span className={cn('num relative text-xs font-semibold', scoreTone(c.score))}>{c.score === null ? 'n/a' : Math.round(c.score)}</span>
+                      <span className={cn('num relative text-xs font-semibold', scoreTone(c.score))}>{Math.round(c.score as number)}</span>
                     </div>
                   ))}
                 </div>
               </div>
-            ) : (
-              <p className="px-3 py-6 text-center text-xs text-(--muted)">No rating.</p>
-            )}
+            ) : null}
           </Panel>
+          ) : null}
 
+          {book.length ? (
           <Panel title="Ratio book" className="min-h-60 flex-1" right={<span className="text-[11px] text-(--muted)">value · score</span>}>
             <div className="min-h-0 overflow-y-auto">
               {book.length ? (
@@ -890,57 +897,54 @@ export function Analyzer() {
                     })}
                   </tbody>
                 </table>
-              ) : (
-                <p className="px-3 py-6 text-center text-xs text-(--muted)">No data.</p>
-              )}
+              ) : null}
             </div>
           </Panel>
+          ) : null}
         </div>
       </main>
+      {fin ? (
       <section id="appendix" className="p-2 pt-0">
     <Panel
       title="Appendix"
       className="min-h-60"
       right={
         <div className="flex gap-1">
-          <Tab active={bottomTab === 'ratios'} onClick={() => setBottomTab('ratios')}>A. Ratios</Tab>
-          <Tab active={bottomTab === 'industry'} onClick={() => setBottomTab('industry')}>B. Industry</Tab>
-          <Tab active={bottomTab === 'market'} onClick={() => setBottomTab('market')}>C. Market</Tab>
-          <Tab active={bottomTab === 'rubric'} onClick={() => setBottomTab('rubric')}>D. Rubric</Tab>
-          <Tab active={bottomTab === 'filing'} onClick={() => setBottomTab('filing')}>E. Filing</Tab>
+          <Tab active={tab === 'ratios'} onClick={() => setBottomTab('ratios')}>A. Ratios</Tab>
+          {industryRows ? <Tab active={tab === 'industry'} onClick={() => setBottomTab('industry')}>B. Industry</Tab> : null}
+          {marketRows ? <Tab active={tab === 'market'} onClick={() => setBottomTab('market')}>C. Market</Tab> : null}
+          <Tab active={tab === 'rubric'} onClick={() => setBottomTab('rubric')}>D. Rubric</Tab>
+          <Tab active={tab === 'filing'} onClick={() => setBottomTab('filing')}>E. Filing</Tab>
         </div>
       }
     >
-      {bottomTab === 'industry' ? (
-        results ? <IndustryTable result={results.industry} /> : <p className="p-4 text-xs text-(--muted)">Load a filing.</p>
-      ) : bottomTab === 'market' ? (
-        results ? <MarketTable result={results.market} /> : <p className="p-4 text-xs text-(--muted)">Load a filing.</p>
-      ) : bottomTab === 'rubric' ? (
+      {tab === 'industry' ? (
+        results ? <IndustryTable result={results.industry} /> : null
+      ) : tab === 'market' ? (
+        results ? <MarketTable result={results.market} /> : null
+      ) : tab === 'rubric' ? (
         <RubricTable />
-      ) : bottomTab === 'filing' ? (
+      ) : tab === 'filing' ? (
         fin ? (
           <dl className="grid grid-cols-[140px_1fr] gap-x-3 gap-y-1.5 p-3 text-xs">
-            {[
-              ['Company', fin.meta.name], ['Ticker', fin.meta.ticker ?? '-'], ['CIK', fin.meta.cik ?? '-'], ['Form', `${fin.meta.form} ${fin.meta.fiscalPeriod}`],
+            {([
+              ['Company', fin.meta.name], ['Ticker', fin.meta.ticker], ['CIK', fin.meta.cik], ['Form', `${fin.meta.form} ${fin.meta.fiscalPeriod}`.trim()],
               ['Period end', fin.meta.periodEnd], ['Basis', fin.basis === 'annual' ? 'Annual' : 'Quarter (ratios annualized x4; cash flow YTD)'],
-              ['Balance-sheet comparison', fin.bsPrior.assets ? 'prior fiscal year-end' : 'not found'],
-            ].map(([k, v]) => (
+              ['Balance-sheet comparison', fin.bsPrior.assets ? 'prior fiscal year-end' : undefined],
+            ] as [string, string | undefined][]).filter((row): row is [string, string] => !!row[1]).map(([k, v]) => (
               <Fragment key={k}>
                 <dt className="text-(--muted)">{k}</dt>
                 <dd className="num">{v}</dd>
               </Fragment>
             ))}
           </dl>
-        ) : (
-          <p className="p-4 text-xs text-(--muted)">No filing loaded.</p>
-        )
+        ) : null
       ) : results ? (
-        <RatioTable metrics={allMetrics} />
-      ) : (
-        <p className="p-4 text-xs text-(--muted)">Load a filing. Click a row for inputs and XBRL tags.</p>
-      )}
+        <RatioTable metrics={ratioRows} />
+      ) : null}
     </Panel>
       </section>
+      ) : null}
       </div>
     </div>
   )

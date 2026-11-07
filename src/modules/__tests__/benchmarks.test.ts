@@ -58,7 +58,7 @@ describe('industry module', () => {
   it('shows a note instead of rows when no industry is matched', () => {
     const r = runModules(fin())
     expect(r.industry.metrics).toHaveLength(0)
-    expect(r.industry.notes[0].text).toMatch(/Pick one/)
+    expect(r.industry.notes).toHaveLength(0)
   })
   it('explains a missing company value with the specific reason, then compares once a price is set', () => {
     const noPrice = runModules({ ...fin(), industry })
@@ -129,7 +129,7 @@ describe('market module', () => {
   it('shows the provider note when ratios are unavailable', () => {
     const r = runModules({ ...fin(), market: { ...market, ratios: {}, ratiosNote: 'Set FINNHUB_API_KEY' } })
     expect(r.market.metrics).toHaveLength(0)
-    expect(r.market.notes[0].text).toBe('Set FINNHUB_API_KEY')
+    expect(r.market.notes).toHaveLength(0) // missing data is simply not shown
   })
 })
 

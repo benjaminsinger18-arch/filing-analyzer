@@ -16,10 +16,6 @@ export const notes: AnalysisModule = {
     const out: Note[] = []
     const add = (tone: Note['tone'], text: string) => out.push({ tone, text })
 
-    if (!fin.bsCur.currentAssets && !fin.cur.grossProfit) {
-      add('info', 'Bank or insurer filing: several ratios are n/a and debt may be incomplete. Treat the rating with caution.')
-    }
-
     const om = m('operating-margin')
     if (om !== null) {
       if (om < 0) add('watch', `Operating loss: margin ${pct(om)}.`)
@@ -55,7 +51,6 @@ export const notes: AnalysisModule = {
     const dso = m('dso')
     if (dso !== null && dso > 90) add('info', `Receivables take about ${Math.round(dso)} days to collect.`)
 
-    if (out.length === 0) add('info', 'No flags triggered.')
     return { id: 'notes', title: 'Observations', metrics: [], notes: out }
   },
 }

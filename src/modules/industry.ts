@@ -78,7 +78,7 @@ export const industry: AnalysisModule = {
         id: 'industry',
         title: 'Industry comparison',
         metrics: [],
-        notes: [{ tone: 'info', text: 'No industry matched. Pick one.' }],
+        notes: [],
       }
     }
     const all = Object.values(prior).flatMap((r: ModuleResult) => r.metrics)
