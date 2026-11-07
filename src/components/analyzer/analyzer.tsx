@@ -420,6 +420,13 @@ export function Analyzer() {
     } catch {}
   }
 
+  const disableAllModules = () => {
+    setEnabled(new Set())
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(RATIO_MODULES.map((m) => m.id)))
+    } catch {}
+  }
+
   const toggleTheme = () => {
     setDark((d) => {
       try {
@@ -562,7 +569,10 @@ export function Analyzer() {
               <SlidersHorizontal className="size-3.5" /> Show / hide
             </summary>
             <div className="absolute right-0 z-20 mt-1 flex w-72 flex-col gap-0.5 rounded-md border border-(--line) bg-(--panel) p-2 shadow-xl">
-              <button type="button" onClick={enableAllModules} className="mb-1 self-end rounded px-2 py-0.5 text-[11px] text-(--accent) hover:bg-(--panel-2)">Enable all</button>
+              <div className="mb-1 flex justify-end gap-1">
+                <button type="button" onClick={enableAllModules} className="rounded px-2 py-0.5 text-[11px] text-(--accent) hover:bg-(--panel-2)">Select all</button>
+                <button type="button" onClick={disableAllModules} className="rounded px-2 py-0.5 text-[11px] text-(--accent) hover:bg-(--panel-2)">Deselect all</button>
+              </div>
               {RATIO_MODULES.map((m) => (
                 <label key={m.id} className="flex cursor-pointer items-start gap-2 rounded px-2 py-1.5 hover:bg-(--panel-2)">
                   <input type="checkbox" className="mt-0.5" checked={enabled.has(m.id)} onChange={() => toggleModule(m.id)} />
