@@ -78,3 +78,10 @@
 .terminal .formula .katex .mord.text {
   font-family: inherit;
 }
+
+@media print {
+  .terminal { height: auto !important; overflow: visible !important; background: #fff; color: #000; }
+  .terminal > nav, .terminal > div:first-of-type, .terminal main { display: none !important; }
+  .terminal > div { overflow: visible !important; }
+  #appendix { padding: 0; }
+}
