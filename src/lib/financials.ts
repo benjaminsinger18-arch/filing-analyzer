@@ -24,6 +24,38 @@ export type LineItem =
   | 'equity'
   | 'retainedEarnings'
 
+export type MarketRatios = {
+  pe?: number
+  forwardPe?: number
+  peg?: number
+  evEbitda?: number
+  evRevenue?: number
+  pb?: number
+  beta?: number
+  dividendYield?: number
+  marketCap?: number
+}
+
+/** Provider-reported market data (Alpha Vantage), fetched on demand. */
+export type MarketData = {
+  price: number
+  priceAsOf: string | null
+  source: string
+  ratios: MarketRatios
+  sector?: string
+  industry?: string
+  /** Set when ratios could not be fetched (missing key, rate limit). */
+  ratiosNote?: string
+}
+
+/** One Damodaran industry row (US, annual aggregates). Percent-like values are fractions. */
+export type IndustryBenchmark = {
+  name: string
+  asOf: string
+  firms: number
+  values: Record<string, number | null>
+}
+
 /** A value with the XBRL tag it came from, for the audit trail. */
 export type Value = { value: number; tag: string }
 
@@ -57,6 +89,8 @@ export type Financials = {
   price?: number
   /** Date of the entered or fetched price (ISO), shown next to valuation ratios. */
   priceAsOf?: string
+  market?: MarketData
+  industry?: IndustryBenchmark
 }
 
 export const LINE_ITEM_LABELS: Record<LineItem, string> = {
