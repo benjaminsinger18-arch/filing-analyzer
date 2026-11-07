@@ -28,13 +28,12 @@ export const market: AnalysisModule = {
         id: 'market',
         title: 'Market ratios (provider)',
         metrics: [],
-        notes: [{ tone: 'info', text: 'Click Fetch latest.' }],
+        notes: [],
       }
     }
     const all = Object.values(prior).flatMap((r: ModuleResult) => r.metrics)
     const ours = (id: string) => all.find((x) => x.id === id)?.value ?? null
     const notes: Note[] = []
-    if (m.ratiosNote) notes.push({ tone: 'info', text: m.ratiosNote })
 
     const metrics: Metric[] = []
     for (const row of ROWS) {

@@ -13,7 +13,7 @@ export const valuation: AnalysisModule = {
         id: 'valuation',
         title: 'Valuation',
         metrics: [],
-        notes: [{ tone: 'info', text: 'Enter a share price.' }],
+        notes: [],
       }
     }
     const price = { value: fin.price, tag: 'user input' }
