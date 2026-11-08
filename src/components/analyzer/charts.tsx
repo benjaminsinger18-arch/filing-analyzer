@@ -64,8 +64,8 @@ export function FundamentalsChart({ fin, tab }: { fin: Financials; tab: ChartTab
               )
             }}
           />
-          <Bar dataKey="prior" fill="var(--line)" radius={[3, 3, 0, 0]} maxBarSize={36} />
-          <Bar dataKey="cur" radius={[3, 3, 0, 0]} maxBarSize={36}>
+          <Bar dataKey="prior" fill="var(--line)" radius={[3, 3, 0, 0]} maxBarSize={36} isAnimationActive={false} />
+          <Bar dataKey="cur" radius={[3, 3, 0, 0]} maxBarSize={36} isAnimationActive={false}>
             {rows.map((r) => (
               <Cell key={r.name} fill={changeColor(r.item, r.cur, r.prior)} />
             ))}
