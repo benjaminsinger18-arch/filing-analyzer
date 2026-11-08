@@ -1,6 +1,8 @@
 /* Palette: green #28e35d (up), magenta #b51b6b (down), cyan #4ddee5 (accent / middle tier); light theme uses slightly deeper green and cyan for contrast.
    Exchange-terminal look: dense panels, green/red up/down colors, dark default with a light variant. */
 .terminal {
+  /* Containing block for absolutely positioned children (e.g. sr-only text) so overflow clipping applies and the page itself never scrolls. */
+  position: relative;
   --bg: #f3f5f8;
   --panel: #ffffff;
   --panel-2: #f7f9fb;
