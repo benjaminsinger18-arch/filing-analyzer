@@ -17,6 +17,7 @@ import { ComparePanel } from './compare'
 import { downloadCsv, ratiosCsv } from './export'
 import { RatioBook } from './ratio-book'
 import { TrendPanel, seriesFor } from './trend'
+import { Footer } from './footer'
 import { priorValues } from '@/modules/prior'
 
 const MAX_BYTES = 40 * 1024 * 1024
@@ -363,7 +364,7 @@ export function Analyzer() {
               <i className="block h-5 w-1 bg-(--up)" />
               <i className="block h-4 w-1 bg-(--down)" />
             </span>
-            <span className="text-base font-bold tracking-wide">FILINGS</span>
+            <span className="text-base font-bold tracking-wide">FILING ANALYZER</span>
           </div>
           <span className="hidden text-xs text-(--muted) sm:inline">10-K / 10-Q analyzer</span>
         </div>
@@ -419,11 +420,11 @@ export function Analyzer() {
                       const s = ratingOf(h)
                       const active = fin === h
                       return (
-                        <tr key={`${h.meta.name}${h.meta.form}${h.meta.periodEnd}`} onClick={() => setFin(h)} className={cn('cursor-pointer border-t border-(--line) hover:bg-(--panel-2)', active && 'bg-(--accent)/15 shadow-[inset_4px_0_0_var(--accent)]')}>
+                        <tr key={`${h.meta.name}${h.meta.form}${h.meta.periodEnd}`} onClick={() => setFin(h)} onKeyDown={(e) => { if (e.key === 'Enter') setFin(h) }} tabIndex={0} aria-selected={active} className={cn('cursor-pointer border-t border-(--line) hover:bg-(--panel-2)', active && 'bg-(--accent)/15 shadow-[inset_4px_0_0_var(--accent)]')}>
                           <td className="px-3 py-1.5">
                             <input
                               type="checkbox"
-                              aria-label="Compare"
+                              aria-label={`Compare ${h.meta.ticker ?? h.meta.name} ${h.meta.form} ${h.meta.periodEnd}`}
                               checked={compareKeys.includes(keyOf(h))}
                               onClick={(e) => e.stopPropagation()}
                               onChange={() => setCompareKeys((c) => (c.includes(keyOf(h)) ? c.filter((k) => k !== keyOf(h)) : [...c, keyOf(h)].slice(-2)))}
@@ -572,8 +573,17 @@ export function Analyzer() {
                 <button type="button" onClick={() => fileRef.current?.click()} className="rounded border border-(--line) px-3 py-1 text-xs hover:bg-(--panel-2)">Choose file</button>
               </div>
             </div>
-            {loading ? <p className="px-3 pb-3 text-xs text-(--muted)">Working...</p> : null}
-            {error ? <p className="mx-3 mb-3 rounded bg-(--down-bg) px-3 py-2 text-xs text-(--down)">{error}</p> : null}
+            <div role="status" aria-live="polite">
+              {loading ? (
+                <div className="px-3 pb-3">
+                  <p className="mb-1.5 text-xs text-(--muted)">Loading...</p>
+                  <div className="h-1 animate-pulse rounded bg-(--accent)/40" />
+                </div>
+              ) : null}
+            </div>
+            <div role="alert">
+              {error ? <p className="mx-3 mb-3 rounded bg-(--down-bg) px-3 py-2 text-xs text-(--down)">{error} Try another filing, or upload the .htm file.</p> : null}
+            </div>
           </Panel>
 
           {compared.length === 2 ? (
@@ -587,6 +597,7 @@ export function Analyzer() {
               fin ? (
                 <div className="flex items-center gap-2 text-[11px] text-(--muted)">
                   <Chip className="bg-(--panel-2) text-(--fg)">{fin.meta.form}{fin.meta.fiscalPeriod ? ` ${fin.meta.fiscalPeriod}` : ''}</Chip>
+                  {fin.basis === 'quarter' ? <Chip className="bg-(--warn-bg) text-(--warn)" >Annualized x4</Chip> : null}
                   <span className="num">period end {fin.meta.periodEnd}</span>
                   <select
                     value=""
@@ -635,6 +646,7 @@ export function Analyzer() {
                   <div>
                     <p className={cn('num text-4xl leading-none font-bold', scoreTone(rating.composite))}>{Math.round(rating.composite)}</p>
                     <p className="mt-1 text-[11px] text-(--muted)">{rating.used}/{rating.total} categories</p>
+                    {rating.providerInputs > 0 ? <p className="text-[11px] text-(--muted)">{rating.providerInputs} input{rating.providerInputs > 1 ? 's' : ''} from Finnhub</p> : null}
                   </div>
                   <Chip className={cn('text-sm', tierTone[rating.tier])}>{rating.tier}</Chip>
                 </div>
@@ -708,6 +720,7 @@ export function Analyzer() {
     </Panel>
       </section>
       ) : null}
+      <Footer />
       </div>
     </div>
   )

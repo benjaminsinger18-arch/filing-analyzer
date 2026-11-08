@@ -46,11 +46,13 @@ const fmtVal = (id: string, v: number) => (id === 'piotroski' ? `${v} / 9` : RUB
 export function computeRating(results: Record<string, ModuleResult>): RatingResult {
   const all = Object.values(results).flatMap((r) => r.metrics)
   const get = (id: string) => all.find((m) => m.id === id)
+  let providerInputs = 0
   const categories: RatingCategory[] = CATEGORIES.map((c) => {
     const parts: { score: number; text: string }[] = []
     for (const id of c.metrics) {
       const m = get(id)
       if (!m || m.value === null) continue
+      if (m.source === 'provider') providerInputs++
       if (id === 'altman') {
         const s = m.value > 2.6 ? 100 : m.value >= 1.1 ? 55 : 10
         parts.push({ score: s, text: `Altman Z'' ${m.value.toFixed(2)} -> ${s}` })
@@ -70,7 +72,7 @@ export function computeRating(results: Record<string, ModuleResult>): RatingResu
   const composite = used.length >= 2 ? used.reduce((a, c) => a + (c.score as number), 0) / used.length : null
   const tier: RatingResult['tier'] =
     composite === null ? 'Insufficient data' : composite >= 75 ? 'Strong' : composite >= 60 ? 'Solid' : composite >= 45 ? 'Mixed' : 'Weak'
-  return { composite, tier, categories, used: used.length, total: categories.length }
+  return { composite, tier, categories, used: used.length, total: categories.length, providerInputs }
 }
 
 export const rating: AnalysisModule = {

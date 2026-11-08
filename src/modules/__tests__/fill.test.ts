@@ -35,6 +35,12 @@ describe('provider fill', () => {
     expect(row.compare?.companySource).toBe('provider')
     expect(row.compare?.flag).toBe('Above')
   })
+  it('counts provider inputs that feed the rating', () => {
+    expect(runModules(fin()).rating.rating!.providerInputs).toBe(0)
+    const noInterest = buildFixture().replace('us-gaap:InterestExpense"', 'us-gaap:SomethingElse"')
+    const r = runModules({ ...fin(noInterest), market: market({ interestCoverage: 12 }) })
+    expect(r.rating.rating!.providerInputs).toBe(1)
+  })
   it('changes nothing without provider fundamentals', () => {
     const a = runModules(fin())
     const b = runModules({ ...fin(), market: { ...market({}), fundamentals: undefined } })

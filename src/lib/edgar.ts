@@ -75,7 +75,7 @@ export async function latestFilings(cik: string, forms: string[], limit = 4): Pr
 }
 
 export async function fetchFilingHtml(url: string): Promise<string> {
-  if (!url.startsWith('https://www.sec.gov/Archives/edgar/data/')) {
+  if (!url.startsWith('https://www.sec.gov/Archives/edgar/data/') || url.includes('..')) {
     throw new EdgarError('Only sec.gov EDGAR archive URLs are allowed.', 400)
   }
   const res = await fetch(url, { headers: headers(), next: { revalidate: 3600 } })
