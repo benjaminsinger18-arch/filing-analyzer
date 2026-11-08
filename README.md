@@ -131,6 +131,10 @@ src/data/         industry averages and the ticker-to-industry map
 | Rating | weighted composite from the rubric in `src/modules/rating.ts` |
 | Observations | plain-language flags such as an operating loss or thin interest coverage |
 
+## License
+
+MIT. See [LICENSE](LICENSE).
+
 ## Credits
 
 Filing data from the US Securities and Exchange Commission. Industry data by Aswath Damodaran. Market data from Finnhub, Alpha Vantage and Yahoo Finance.
