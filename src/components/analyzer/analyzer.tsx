@@ -187,7 +187,7 @@ export function Analyzer() {
 
         {/* Center: header, chart, loader, tables */}
         <div className="flex min-h-0 flex-col gap-2 lg:overflow-y-auto">
-          <Panel title="Load filing" className="shrink-0">
+          <Panel title="Load filing" className="relative shrink-0">
             <div className="grid grid-cols-1 gap-3 p-3 md:grid-cols-2">
               <div className="flex flex-col gap-2">
                 <p className="text-xs font-semibold">Search company or ticker</p>
@@ -313,10 +313,10 @@ export function Analyzer() {
             </div>
             <div role="status" aria-live="polite">
               {loading ? (
-                <div className="px-3 pb-3">
-                  <p className="mb-1.5 text-xs text-(--muted)">Loading...</p>
-                  <div className="h-1 animate-pulse rounded bg-(--accent)/40" />
-                </div>
+                <>
+                  <span className="sr-only">Loading...</span>
+                  <div className="absolute inset-x-0 bottom-0 h-0.5 animate-pulse rounded-b bg-(--accent)" />
+                </>
               ) : null}
             </div>
             <div role="alert">
@@ -354,7 +354,7 @@ export function Analyzer() {
                 </div>
               ) : null
             }
-            className="min-h-136 flex-1"
+            className="shrink-0"
           >
             {fin ? (
               <>
