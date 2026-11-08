@@ -38,7 +38,7 @@ export function deltaTone(id: string, diff: number): string {
 
 export function RatioBook({ rows, prior, industry }: { rows: { m: Metric }[]; prior: Record<string, number>; industry?: ModuleResult }) {
   return (
-    <Panel title="Ratio book" className="min-h-60 flex-1">
+    <Panel id="ratios" title="Ratio book" className="min-h-60 flex-1">
       <p className="border-b border-(--line) px-3 py-1.5 text-[10px] text-(--muted)">
         Small figure: change vs. a year earlier. Marker: vs. industry (● favorable, ○ unfavorable, ◐ on par). Green favorable, red unfavorable.
       </p>

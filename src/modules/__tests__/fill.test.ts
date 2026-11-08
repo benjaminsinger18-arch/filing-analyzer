@@ -101,6 +101,15 @@ describe('banking module', () => {
     expect(metric(r, 'debt-equity').value).toBeNull()
     expect(metric(r, 'efficiency').value).toBeCloseTo(280 / 500)
   })
+  it('adds a caveat to a bank rating and none to a non-bank', () => {
+    const f = fin(bankHtml)
+    const cur = { ...f.cur }
+    const bsCur = { ...f.bsCur }
+    delete cur.grossProfit
+    delete bsCur.currentAssets
+    expect(runModules({ ...f, cur, bsCur }).rating.rating!.note).toMatch(/bank/i)
+    expect(runModules(fin()).rating.rating!.note).toBeUndefined()
+  })
   it('produces nothing for a non-bank', () => {
     const r = runModules(fin())
     expect(r.bank.metrics.every((m) => m.value === null)).toBe(true)
@@ -115,5 +124,17 @@ describe('EBITDA margin', () => {
     expect(metric(r, 'gross-margin').value).toBeNull()
     expect(metric(r, 'ebitda-margin').value).toBeCloseTo((200 + 30) / 1000)
     expect(r.industry.metrics.find((m) => m.id === 'ind-ebitda-margin')?.compare).toMatchObject({ flag: 'Above', read: 'Favorable' })
+  })
+})
+
+describe('total revenues', () => {
+  it('prefers the Revenues total over the narrower contract-revenue line', () => {
+    const html = buildFixture().replace('</body>', '<ix:nonFraction name="us-gaap:Revenues" contextRef="FY24" unitRef="usd" decimals="-6" scale="6">1,100</ix:nonFraction></body>')
+    const f = fin(html)
+    expect(f.cur.revenue?.value).toBe(1100 * M)
+    expect(f.cur.revenue?.tag).toBe('Revenues')
+  })
+  it('keeps the contract-revenue line when it is the only one', () => {
+    expect(fin().cur.revenue?.tag).not.toBe('Revenues')
   })
 })
