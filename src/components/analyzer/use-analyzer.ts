@@ -269,21 +269,28 @@ export function useAnalyzer() {
     void searchTicker()
   }
 
-  async function searchTicker(sym?: string) {
+  /** Switching 10-K / 10-Q re-runs the lookup for the company already chosen. */
+  function changeForm(f: '10-K' | '10-Q') {
+    setFormType(f)
+    const t = symbol ?? fin?.meta.ticker ?? (filings ? ticker.trim() : '')
+    if (t) void searchTicker(t, f)
+  }
+
+  async function searchTicker(sym?: string, form: '10-K' | '10-Q' = formType) {
     const t = (sym ?? ticker).trim()
     if (!t) return
     setError(null)
     setLoading(true)
     setFilings(null)
     try {
-      const res = await fetch(`/api/edgar?ticker=${encodeURIComponent(t)}&form=${formType}`)
+      const res = await fetch(`/api/edgar?ticker=${encodeURIComponent(t)}&form=${form}`)
       const body = await res.json()
       if (!res.ok) throw new Error(body.error ?? 'Lookup failed.')
       setFilings([...(body.filings as FilingRef[])].sort((a, b) => b.reportDate.localeCompare(a.reportDate)))
-      if (!body.filings.length) setError(body.note ?? `No ${formType} filings found for ${t.toUpperCase()}.`)
+      if (!body.filings.length) setError(body.note ?? `No ${form} filings found for ${t.toUpperCase()}.`)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Lookup failed.')
-      setRetry(() => () => void searchTicker(sym))
+      setRetry(() => () => void searchTicker(sym, form))
     } finally {
       setLoading(false)
     }
@@ -386,6 +393,7 @@ export function useAnalyzer() {
     filings,
     fin,
     formType,
+    changeForm,
     gapMonths,
     handleFile,
     histResults,
@@ -416,7 +424,6 @@ export function useAnalyzer() {
     setCompareKeys,
     setDrag,
     setFin,
-    setFormType,
     setPrice,
     setPriceNote,
     setRetry,

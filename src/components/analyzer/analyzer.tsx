@@ -1,7 +1,7 @@
 'use client'
 
 import { Fragment } from 'react'
-import { Check, Moon, Search, SlidersHorizontal, Sun, Upload } from 'lucide-react'
+import { Check, Moon, SlidersHorizontal, Sun, Upload } from 'lucide-react'
 import './terminal.css'
 
 import { RATIO_MODULES } from '@/modules/registry'
@@ -39,6 +39,7 @@ export function Analyzer() {
     filings,
     fin,
     formType,
+    changeForm,
     gapMonths,
     handleFile,
     histResults,
@@ -70,7 +71,6 @@ export function Analyzer() {
     setCompareKeys,
     setDrag,
     setFin,
-    setFormType,
     setPrice,
     setPriceNote,
     setRetry,
@@ -242,13 +242,10 @@ export function Analyzer() {
                       </ul>
                     ) : null}
                   </div>
-                  <select value={formType} onChange={(e) => setFormType(e.target.value as '10-K' | '10-Q')} aria-label="Form type" className="h-8 px-2">
+                  <select value={formType} onChange={(e) => changeForm(e.target.value as '10-K' | '10-Q')} aria-label="Form type" className="h-8 px-2">
                     <option>10-K</option>
                     <option>10-Q</option>
                   </select>
-                  <button type="button" onClick={submit} className="flex h-8 items-center gap-1.5 rounded bg-(--up) px-3 text-xs font-bold text-black">
-                    <Search className="size-3.5" /> FIND
-                  </button>
                 </div>
                 {filings?.length ? (
                   <ul className="flex flex-col">
