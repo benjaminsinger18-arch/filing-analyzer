@@ -190,12 +190,18 @@ function pickFlows(
   const run = (table: Partial<Record<LineItem, string[]>>, mode2: typeof mode) => {
     for (const [item, tags] of Object.entries(table) as [LineItem, string[]][]) {
       const order = prefer[item] ? [prefer[item]!.tag, ...tags.filter((t) => t !== prefer[item]!.tag)] : tags
-      const v =
+      const pickFrom = (tagList: string[]) =>
         mode2 === 'ytd'
-          ? idx.flowLongest(order, end)
+          ? idx.flowLongest(tagList, end)
           : mode2 === 'annual'
-            ? idx.flow(order, end, 340, 380)
-            : idx.flow(order, end, 77, 105)
+            ? idx.flow(tagList, end, 340, 380)
+            : idx.flow(tagList, end, 77, 105)
+      let v = pickFrom(order)
+      // Total revenues (e.g. Walmart's membership income, Chevron's other income) beat the narrower contract-revenue line.
+      if (item === 'revenue' && v && !prefer.revenue && v.tag !== 'Revenues') {
+        const total = pickFrom(['Revenues'])
+        if (total && total.value >= v.value) v = total
+      }
       if (v) out[item] = item === 'interestExpense' ? { ...v, value: Math.abs(v.value) } : v
     }
   }

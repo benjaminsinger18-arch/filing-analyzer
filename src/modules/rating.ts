@@ -80,8 +80,12 @@ export const rating: AnalysisModule = {
   title: 'Screening rating',
   description: 'Composite of the other modules. A screen, not advice.',
   requires: [],
-  run(_fin, prior) {
+  run(fin, prior) {
     const r = computeRating(prior)
+    // Same test normalize uses for banks: interest income instead of cost of revenue, no current assets.
+    if (fin.cur.netInterestIncome && !fin.cur.grossProfit && !fin.bsCur.currentAssets) {
+      r.note = 'Built for industrial companies. A bank is scored on fewer inputs.'
+    }
     return {
       id: 'rating',
       title: 'Screening rating',

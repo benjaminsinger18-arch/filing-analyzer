@@ -1,358 +1,91 @@
 'use client'
 
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment } from 'react'
 import { Check, Moon, Search, SlidersHorizontal, Sun, Upload } from 'lucide-react'
 import './terminal.css'
-import type { Financials, IndustryBenchmark, MarketData } from '@/lib/financials'
-import { normalize, NotIxbrlError } from '@/lib/ixbrl/normalize'
-import { isIxbrl, parseIxbrl } from '@/lib/ixbrl/parse'
-import { RATIO_MODULES, runModules } from '@/modules/registry'
-import type { Company } from '@/lib/search'
+
+import { RATIO_MODULES } from '@/modules/registry'
+
 import { cn } from '@/lib/utils'
 import { FundamentalsChart, StatStrip, CHART_ITEMS, type ChartTab } from './charts'
 import { scoreDepth, scoreTone, tierTone } from './format'
-import { IndustryTable, MarketTable, NoteRow, RatioTable, RubricTable, industryRowVisible } from './tables'
+import { IndustryTable, MarketTable, NoteRow, RatioTable, RubricTable } from './tables'
 import { Chip, Panel, Tab } from './ui'
 import { ComparePanel } from './compare'
 import { downloadCsv, ratiosCsv } from './export'
 import { RatioBook } from './ratio-book'
-import { TrendPanel, seriesFor } from './trend'
+import { TrendPanel } from './trend'
 import { Footer } from './footer'
-import { priorValues } from '@/modules/prior'
 
-const MAX_BYTES = 40 * 1024 * 1024
-const STORAGE_KEY = 'analyzer.disabledModules'
-const THEME_KEY = 'analyzer.theme'
-const HISTORY_KEY = 'analyzer.history'
-const HISTORY_MAX = 12
-const keyOf = (f: Financials) => `${f.meta.name}|${f.meta.form}|${f.meta.periodEnd}`
-const EXAMPLES = ['AAPL', 'MSFT', 'KO', 'JPM', 'TSLA', 'XOM']
-
-type FilingRef = { form: string; filingDate: string; reportDate: string; url: string }
-type BottomTab = 'ratios' | 'industry' | 'market' | 'rubric' | 'filing'
+import { EXAMPLES, keyOf, useAnalyzer } from './use-analyzer'
 
 export function Analyzer() {
-  const [fin, setFin] = useState<Financials | null>(null)
-  const [history, setHistory] = useState<Financials[]>([])
-  const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [price, setPrice] = useState('')
-  const [market, setMarket] = useState<MarketData | null>(null)
-  const [industry, setIndustry] = useState<IndustryBenchmark | null>(null)
-  const [industryOptions, setIndustryOptions] = useState<string[]>([])
-  const [priceNote, setPriceNote] = useState<string | null>(null)
-  const [ticker, setTicker] = useState('')
-  const [symbol, setSymbol] = useState<string | null>(null)
-  const [suggest, setSuggest] = useState<Company[]>([])
-  const [suggestOpen, setSuggestOpen] = useState(false)
-  const [active, setActive] = useState(-1)
-  const [formType, setFormType] = useState<'10-K' | '10-Q'>('10-K')
-  const [filings, setFilings] = useState<FilingRef[] | null>(null)
-  const [enabled, setEnabled] = useState<Set<string>>(new Set(RATIO_MODULES.map((m) => m.id)))
-  const [dark, setDark] = useState(true)
-  const [drag, setDrag] = useState(false)
-  const [chartTab, setChartTab] = useState<ChartTab>('income')
-  const [bottomTab, setBottomTab] = useState<BottomTab>('ratios')
-  const [compareKeys, setCompareKeys] = useState<string[]>([])
-  const [bulkNote, setBulkNote] = useState<string | null>(null)
-  const historyReady = useRef(false)
-  const fileRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY)
-      if (raw) {
-        const disabled = new Set(JSON.parse(raw) as string[])
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- restoring persisted preferences after hydration
-        setEnabled(new Set(RATIO_MODULES.map((m) => m.id).filter((id) => !disabled.has(id))))
-      }
-      const t = localStorage.getItem(THEME_KEY)
-      if (t) setDark(t === 'dark')
-    } catch {}
-  }, [])
-
-  // Analyzed filings survive a reload (parsed figures only, no market or industry data).
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(HISTORY_KEY)
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- restoring persisted history after hydration
-      if (raw) setHistory(JSON.parse(raw) as Financials[])
-    } catch {}
-    historyReady.current = true
-  }, [])
-
-  useEffect(() => {
-    if (!historyReady.current) return
-    try {
-      localStorage.setItem(HISTORY_KEY, JSON.stringify(history))
-    } catch {}
-  }, [history])
-
-  // Restore a shared link (?t=AAPL&url=<filing>) once after hydration.
-  const restored = useRef(false)
-  useEffect(() => {
-    if (restored.current) return
-    restored.current = true
-    const q = new URLSearchParams(window.location.search)
-    const t = q.get('t')
-    const url = q.get('url')
-    if (t) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- restoring state from the URL after hydration
-      setTicker(t)
-      setSymbol(t)
-    }
-    if (url) void loadFiling(url)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  const sourceUrl = fin?.meta.sourceUrl
-  const metaTicker = fin?.meta.ticker
-  useEffect(() => {
-    if (!fin || !restored.current) return
-    const q = new URLSearchParams()
-    if (metaTicker) q.set('t', metaTicker)
-    if (sourceUrl) q.set('url', sourceUrl)
-    window.history.replaceState(null, '', q.size ? `?${q}` : window.location.pathname)
-  }, [fin, metaTicker, sourceUrl])
-
-  const toggleModule = (id: string) => {
-    setEnabled((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(RATIO_MODULES.map((m) => m.id).filter((id) => !next.has(id))))
-      } catch {}
-      return next
-    })
-  }
-
-  const enableAllModules = () => {
-    setEnabled(new Set(RATIO_MODULES.map((m) => m.id)))
-    try {
-      localStorage.removeItem(STORAGE_KEY)
-    } catch {}
-  }
-
-  const disableAllModules = () => {
-    setEnabled(new Set())
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(RATIO_MODULES.map((m) => m.id)))
-    } catch {}
-  }
-
-  const toggleTheme = () => {
-    setDark((d) => {
-      try {
-        localStorage.setItem(THEME_KEY, d ? 'light' : 'dark')
-      } catch {}
-      return !d
-    })
-  }
-
-  const results = useMemo(() => {
-    if (!fin) return null
-    const p = Number(price)
-    return runModules({ ...fin, price: p > 0 ? p : undefined, priceAsOf: market?.priceAsOf ?? undefined, market: market ?? undefined, industry: industry ?? undefined })
-  }, [fin, price, market, industry])
-
-  async function loadIndustry(params: string) {
-    try {
-      const res = await fetch(`/api/industry?${params}`)
-      const body = await res.json()
-      setIndustryOptions(body.options ?? [])
-      setIndustry(body.industry ?? null)
-    } catch {
-      setIndustry(null)
-    }
-  }
-
-  const present = (f: Financials) => {
-    setFin(f)
-    // Keep a price already fetched for this ticker; otherwise fetch one so valuation works right away.
-    if (!f.meta.ticker || market?.ticker !== f.meta.ticker.toUpperCase()) {
-      setMarket(null)
-      setPrice('')
-      setPriceNote(null)
-      if (f.meta.ticker) void fetchMarket(f.meta.ticker)
-    }
-    void loadIndustry(f.meta.ticker ? `ticker=${encodeURIComponent(f.meta.ticker)}` : '')
-    addHistory(f)
-  }
-
-  function addHistory(f: Financials) {
-    setHistory((h) =>
-      [f, ...h.filter((x) => keyOf(x) !== keyOf(f))]
-        .sort((a, b) => b.meta.periodEnd.localeCompare(a.meta.periodEnd) || a.meta.name.localeCompare(b.meta.name))
-        .slice(0, HISTORY_MAX),
-    )
-  }
-
-  /** Loads the most recent filings in the list into the history (for trends) without changing the open filing. */
-  async function loadMany(list: FilingRef[]) {
-    const todo = list.slice(0, 5)
-    let done = 0
-    for (const f of todo) {
-      setBulkNote(`Loading ${done + 1} of ${todo.length}...`)
-      try {
-        const res = await fetch(`/api/edgar?url=${encodeURIComponent(f.url)}`)
-        const body = await res.json()
-        if (res.ok) addHistory(body.financials)
-      } catch {}
-      done++
-    }
-    setBulkNote(null)
-  }
-
-  async function handleFile(file: File) {
-    setError(null)
-    setFilings(null)
-    if (file.size > MAX_BYTES) return setError('That file is larger than 40 MB.')
-    if (!/\.(htm|html|xhtml)$/i.test(file.name)) {
-      return setError('Upload an EDGAR .htm filing (inline XBRL).')
-    }
-    setLoading(true)
-    try {
-      const parsed = parseIxbrl(await file.text())
-      if (!isIxbrl(parsed)) throw new NotIxbrlError('No inline-XBRL data found. Use the main .htm of a 2019+ filing.')
-      present(normalize(parsed))
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not read that filing.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // Debounced company search as the user types (partial names and tickers).
-  useEffect(() => {
-    const q = ticker.trim()
-    if (!q || symbol) return
-    let stale = false
-    const t = setTimeout(async () => {
-      try {
-        const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`)
-        const body = await res.json()
-        if (!stale) {
-          setSuggest(body.results ?? [])
-          setActive(-1)
-        }
-      } catch {
-        if (!stale) setSuggest([])
-      }
-    }, 180)
-    return () => {
-      stale = true
-      clearTimeout(t)
-    }
-  }, [ticker, symbol])
-
-  function pick(c: Company) {
-    setTicker(c.ticker)
-    setSymbol(c.ticker)
-    setSuggestOpen(false)
-    void searchTicker(c.ticker)
-  }
-
-  /** Enter / FIND: take the highlighted or top suggestion unless the text is already an exact ticker. */
-  function submit() {
-    const s = suggest[active] ?? suggest[0]
-    if (s && suggestOpen && (active >= 0 || ticker.trim().toUpperCase() !== s.ticker)) return pick(s)
-    void searchTicker()
-  }
-
-  async function searchTicker(sym?: string) {
-    const t = (sym ?? ticker).trim()
-    if (!t) return
-    setError(null)
-    setLoading(true)
-    setFilings(null)
-    try {
-      const res = await fetch(`/api/edgar?ticker=${encodeURIComponent(t)}&form=${formType}`)
-      const body = await res.json()
-      if (!res.ok) throw new Error(body.error ?? 'Lookup failed.')
-      setFilings([...(body.filings as FilingRef[])].sort((a, b) => b.reportDate.localeCompare(a.reportDate)))
-      if (!body.filings.length) setError(body.note ?? `No ${formType} filings found for ${t.toUpperCase()}.`)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Lookup failed.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  /** Example button: look up the ticker and open its latest 10-K. */
-  async function quickStart(sym: string) {
-    setTicker(sym)
-    setSymbol(sym)
-    setFormType('10-K')
-    setError(null)
-    setLoading(true)
-    setFilings(null)
-    try {
-      const res = await fetch(`/api/edgar?ticker=${sym}&form=10-K`)
-      const body = await res.json()
-      if (!res.ok) throw new Error(body.error ?? 'Lookup failed.')
-      const list = [...(body.filings as FilingRef[])].sort((a, b) => b.reportDate.localeCompare(a.reportDate))
-      setFilings(list)
-      if (list[0]) await loadFiling(list[0].url)
-      else setError(body.note ?? `No 10-K filings found for ${sym}.`)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Lookup failed.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  async function fetchMarket(symbolArg?: string) {
-    const sym = (symbolArg ?? fin?.meta.ticker ?? symbol ?? ticker).trim()
-    if (!sym) return setPriceNote('Enter a ticker or load a filing first.')
-    setPriceNote('Fetching...')
-    try {
-      const res = await fetch(`/api/market?ticker=${encodeURIComponent(sym)}`)
-      const body = await res.json()
-      if (!res.ok) throw new Error(body.error ?? 'Price lookup failed.')
-      const m = body as MarketData
-      setMarket(m)
-      setPrice(String(m.price))
-      setPriceNote(`USD ${m.price} as of ${m.priceAsOf ?? 'latest'} · ${m.source}`)
-    } catch (e) {
-      setPriceNote(e instanceof Error ? e.message : 'Price lookup failed.')
-    }
-  }
-
-  async function loadFiling(url: string) {
-    setError(null)
-    setLoading(true)
-    try {
-      const res = await fetch(`/api/edgar?url=${encodeURIComponent(url)}`)
-      const body = await res.json()
-      if (!res.ok) throw new Error(body.error ?? 'Could not load that filing.')
-      present(body.financials)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not load that filing.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const histResults = useMemo(() => new Map(history.map((h) => [h, runModules(h)] as const)), [history])
-  const priorMap = useMemo(() => (fin ? priorValues(fin) : {}), [fin])
-  const rating = results?.rating?.rating
-  const scored = (rating?.categories ?? []).filter((c) => c.score !== null).sort((a, b) => (b.score as number) - (a.score as number))
-  const ratingSummary = scored.length >= 2 ? `Strongest: ${scored[0].label}. Weakest: ${scored[scored.length - 1].label}.` : null
-  const industryRows = results?.industry?.metrics.filter(industryRowVisible).length ?? 0
-  const marketRows = results?.market?.metrics.length ?? 0
-  const tab: BottomTab = (bottomTab === 'industry' && !industryRows) || (bottomTab === 'market' && !marketRows) ? 'ratios' : bottomTab
-  const allMetrics = results
-    ? RATIO_MODULES.filter((m) => results[m.id] && enabled.has(m.id) && m.id !== 'industry' && m.id !== 'market').flatMap((m) => results[m.id].metrics.map((metric) => ({ moduleTitle: m.title, m: metric })))
-    : []
-  const book = allMetrics.filter(({ m }) => m.value !== null)
-  const ratioRows = allMetrics.filter(({ m }) => m.value !== null)
-  const ratingOf = (f: Financials) => {
-    const r = histResults.get(f)?.rating?.rating
-    return r?.composite == null ? null : Math.round(r.composite)
-  }
-  const compared = compareKeys.map((k) => history.find((h) => keyOf(h) === k)).filter((h): h is Financials => !!h)
-  const series = fin ? seriesFor(fin, history, histResults) : []
+  const {
+    active,
+    book,
+    bulkNote,
+    chartTab,
+    clearHistory,
+    compareKeys,
+    compared,
+    dark,
+    disableAllModules,
+    drag,
+    enableAllModules,
+    enabled,
+    error,
+    fetchMarket,
+    fileRef,
+    filings,
+    fin,
+    formType,
+    gapMonths,
+    handleFile,
+    histResults,
+    history,
+    industry,
+    industryOptions,
+    industryRows,
+    loadFiling,
+    loadIndustry,
+    loadMany,
+    loading,
+    marketRows,
+    pick,
+    price,
+    priceNote,
+    priorMap,
+    quickStart,
+    rating,
+    ratingOf,
+    ratingSummary,
+    ratioRows,
+    results,
+    retry,
+    tab,
+    series,
+    setActive,
+    setBottomTab,
+    setChartTab,
+    setCompareKeys,
+    setDrag,
+    setFin,
+    setFormType,
+    setPrice,
+    setPriceNote,
+    setRetry,
+    setSuggest,
+    setSuggestOpen,
+    setSymbol,
+    setTicker,
+    submit,
+    suggest,
+    suggestOpen,
+    symbol,
+    ticker,
+    toggleModule,
+    toggleTheme,
+  } = useAnalyzer()
 
   return (
     <div className={cn('terminal flex h-svh flex-col overflow-hidden', dark && 'dark')}>
@@ -401,11 +134,18 @@ export function Analyzer() {
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto scroll-smooth">
+      {fin ? (
+        <nav aria-label="Sections" className="sticky top-0 z-20 flex shrink-0 gap-1 border-b border-(--line) bg-(--panel) px-2 py-1 text-xs lg:hidden">
+          {[['Rating', '#rating'], ['Ratios', '#ratios'], ['Chart', '#chart'], ['Appendix', '#appendix']].map(([label, href]) => (
+            <a key={href} href={href} className="rounded px-2.5 py-1 text-(--muted) hover:text-(--fg)">{label}</a>
+          ))}
+        </nav>
+      ) : null}
       <main className="grid grid-cols-1 gap-2 p-2 lg:h-[calc(100svh-4.5rem)] lg:grid-cols-[280px_minmax(0,1fr)_340px] lg:overflow-hidden">
         {/* Left: watchlist + observations */}
         <div className="flex min-h-0 flex-col gap-2 lg:overflow-y-auto">
           {history.length ? (
-          <Panel title="Analyzed" className="shrink-0">
+          <Panel title="Analyzed" className="shrink-0" right={<button type="button" onClick={clearHistory} className="text-[11px] text-(--accent) hover:underline">Clear</button>}>
             <div className="max-h-72 overflow-y-auto">
               {history.length > 0 ? (
                 <table className="w-full text-left">
@@ -558,6 +298,7 @@ export function Analyzer() {
                     <button type="button" onClick={() => void fetchMarket()} className="h-7 rounded border border-(--line) px-2 text-[11px] text-(--accent) hover:bg-(--panel-2)">Fetch latest</button>
                   </label>
                   {priceNote ? <p className="text-[11px] text-(--muted)">{priceNote}</p> : null}
+                  {gapMonths > 6 ? <p className="text-[11px] text-(--muted)">This price is {gapMonths} months after the filing period, so multiples mix two dates.</p> : null}
                 </div>
               </div>
               <div
@@ -582,7 +323,7 @@ export function Analyzer() {
               ) : null}
             </div>
             <div role="alert">
-              {error ? <p className="mx-3 mb-3 rounded bg-(--down-bg) px-3 py-2 text-xs text-(--down)">{error} Try another filing, or upload the .htm file.</p> : null}
+              {error ? <p className="mx-3 mb-3 rounded bg-(--down-bg) px-3 py-2 text-xs text-(--down)">{error} Try another filing, or upload the .htm file.{retry ? <button type="button" onClick={() => { setRetry(null); retry() }} className="ml-2 underline">Retry</button> : null}</p> : null}
             </div>
           </Panel>
 
@@ -592,6 +333,7 @@ export function Analyzer() {
 
           {fin ? (
           <Panel
+            id="chart"
             title={`${fin.meta.ticker ?? ''} ${fin.meta.name}`.trim()}
             right={
               fin ? (
@@ -599,6 +341,7 @@ export function Analyzer() {
                   <Chip className="bg-(--panel-2) text-(--fg)">{fin.meta.form}{fin.meta.fiscalPeriod ? ` ${fin.meta.fiscalPeriod}` : ''}</Chip>
                   {fin.basis === 'quarter' ? <Chip className="bg-(--warn-bg) text-(--warn)" >Annualized x4</Chip> : null}
                   <span className="num">period end {fin.meta.periodEnd}</span>
+                  <span>Industry</span>
                   <select
                     value=""
                     onChange={(e) => e.target.value && void loadIndustry(`name=${encodeURIComponent(e.target.value)}`)}
@@ -639,13 +382,14 @@ export function Analyzer() {
         {/* Right: rating + ratio book */}
         <div className="flex min-h-0 flex-col gap-2 lg:overflow-y-auto">
           {rating && rating.composite !== null ? (
-          <Panel title="Screening rating" className="shrink-0">
+          <Panel id="rating" title="Screening rating" className="shrink-0">
             {rating ? (
               <div className="flex flex-col gap-3 p-3">
                 <div className="flex items-end justify-between">
                   <div>
                     <p className={cn('num text-4xl leading-none font-bold', scoreTone(rating.composite))}>{Math.round(rating.composite)}</p>
                     <p className="mt-1 text-[11px] text-(--muted)">{rating.used}/{rating.total} categories</p>
+                    {rating.note ? <p className="text-[11px] text-(--muted)">{rating.note}</p> : null}
                     {rating.providerInputs > 0 ? <p className="text-[11px] text-(--muted)">{rating.providerInputs} input{rating.providerInputs > 1 ? 's' : ''} from Finnhub</p> : null}
                   </div>
                   <Chip className={cn('text-sm', tierTone[rating.tier])}>{rating.tier}</Chip>
@@ -678,6 +422,7 @@ export function Analyzer() {
       {fin ? (
       <section id="appendix" className="p-2 pt-0">
     <Panel
+      sticky
       title="Appendix"
       className="min-h-60"
       right={

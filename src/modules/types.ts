@@ -68,6 +68,8 @@ export type RatingResult = {
   categories: RatingCategory[]
   used: number
   total: number
+  /** Caveat shown beside the score, e.g. for banks. */
+  note?: string
   /** How many of the metrics feeding the score came from the data provider instead of the filing. */
   providerInputs: number
 }
