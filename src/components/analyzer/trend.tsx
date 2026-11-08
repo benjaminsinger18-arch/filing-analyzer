@@ -57,7 +57,7 @@ export function TrendPanel({ series }: { series: Series }) {
             <XAxis dataKey="period" tick={{ fontSize: 11, fill: 'var(--muted)' }} tickLine={false} axisLine={false} />
             <YAxis tick={{ fontSize: 11, fill: 'var(--muted)' }} tickLine={false} axisLine={false} tickFormatter={fmt} width={64} domain={['auto', 'auto']} />
             <Tooltip position={{ x: 72, y: 4 }} isAnimationActive={false} formatter={(v) => fmt(Number(v))} contentStyle={{ background: 'var(--panel)', border: '1px solid var(--line)', fontSize: 12 }} />
-            <Line type="monotone" dataKey="value" stroke="var(--accent)" strokeWidth={2} dot={{ r: 3, fill: 'var(--accent)' }} />
+            <Line type="monotone" dataKey="value" isAnimationActive={false} stroke="var(--accent)" strokeWidth={2} dot={{ r: 3, fill: 'var(--accent)' }} />
           </LineChart>
         </ResponsiveContainer>
       </div>
