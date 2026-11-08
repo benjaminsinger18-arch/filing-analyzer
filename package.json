@@ -2,7 +2,7 @@
   "name": "filing-analyzer",
   "version": "0.1.0",
   "private": true,
-  "description": "Analyze an SEC 10-K or 10-Q: ratios, quality scores, industry comparison and a transparent screening rating.",
+  "description": "Analyze SEC 10-K and 10-Q filings: ratios, quality scores and a transparent screening rating",
   "engines": {
     "node": ">=20.9"
   },
@@ -31,7 +31,7 @@
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",
     "@types/katex": "^0.16.8",
-    "@types/node": "^20",
+    "@types/node": "^22.20.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
@@ -41,6 +41,5 @@
     "vite": "^8.3.6",
     "vitest": "^5.1.0",
     "xlsx": "^0.18.5"
-  },
-  "description": "Analyze SEC 10-K and 10-Q filings: ratios, quality scores and a transparent screening rating"
+  }
 }
