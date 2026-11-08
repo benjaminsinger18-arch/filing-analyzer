@@ -142,6 +142,6 @@ describe('modules', () => {
   it('flags an operating loss in the notes', () => {
     const loss = normalize(parseIxbrl(buildFixture({ oi24: '-50' })))
     const text = runModules(loss).notes.notes.map((n) => n.text).join(' ')
-    expect(text).toMatch(/Operating loss/)
+    expect(text).toMatch(/Lost money on operations/)
   })
 })

@@ -39,11 +39,16 @@ export const ALL_MODULES = [...RATIO_MODULES, ...SUMMARY_MODULES]
  * Runs every module. Industry, market, rating and observations read the other modules' results, so
  * nothing is skipped; the UI's module toggles only control which ratio sections are displayed.
  */
+/** Metrics that scale one quarter (or its YTD) to a full year on a 10-Q. */
+const ANNUALIZED_IDS = new Set(['roa', 'roe', 'asset-turnover', 'pe', 'ev-sales', 'nim', 'altman'])
+
 export function runModules(fin: Financials): Record<string, ModuleResult> {
   const results: Record<string, ModuleResult> = {}
   for (const mod of RATIO_MODULES) {
     // Provider values fill gaps before later modules (industry, rating) read the results.
-    results[mod.id] = fillFromProvider(mod.run(fin, results), fin)
+    const res = fillFromProvider(mod.run(fin, results), fin)
+    results[mod.id] =
+      fin.basis === 'quarter' ? { ...res, metrics: res.metrics.map((m) => (ANNUALIZED_IDS.has(m.id) && m.value !== null && m.source !== 'provider' ? { ...m, annualized: true } : m)) } : res
   }
   for (const mod of SUMMARY_MODULES) {
     results[mod.id] = mod.run(fin, results)

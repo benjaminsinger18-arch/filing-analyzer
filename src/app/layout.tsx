@@ -15,6 +15,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Filing Analyzer",
   description: "Analyze SEC 10-K and 10-Q filings: ratios, quality scores and a transparent screening rating",
+  openGraph: {
+    title: "Filing Analyzer",
+    description: "Ratios, quality scores and a transparent screening rating for any US 10-K or 10-Q.",
+    type: "website",
+  },
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

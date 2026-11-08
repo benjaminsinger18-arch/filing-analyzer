@@ -3,6 +3,7 @@ import { GOOD_DIRECTION, INDUSTRY_ROW_FOR } from '@/modules/prior'
 import type { Metric, ModuleResult } from '@/modules/types'
 import { cn } from '@/lib/utils'
 import { formatMetric, scoreTone } from './format'
+import { GLOSSARY } from './glossary'
 import { Panel } from './ui'
 import { readTone } from './tables'
 
@@ -21,6 +22,14 @@ export function deltaLabel(m: Metric, prior: number | undefined): { text: string
   return { text: `${diff > 0 ? '+' : ''}${text}`, diff }
 }
 
+/** Tooltip: what the ratio means and which direction is better. */
+function tip(m: Metric): string | undefined {
+  const meaning = GLOSSARY[m.id]
+  if (!meaning) return m.hint
+  const good = GOOD_DIRECTION[m.id]
+  return good ? `${meaning} ${good === 'higher' ? 'Higher' : 'Lower'} is better.` : meaning
+}
+
 export function deltaTone(id: string, diff: number): string {
   const good = GOOD_DIRECTION[id]
   if (!good) return 'text-(--muted)'
@@ -30,6 +39,9 @@ export function deltaTone(id: string, diff: number): string {
 export function RatioBook({ rows, prior, industry }: { rows: { m: Metric }[]; prior: Record<string, number>; industry?: ModuleResult }) {
   return (
     <Panel title="Ratio book" className="min-h-60 flex-1">
+      <p className="border-b border-(--line) px-3 py-1.5 text-[10px] text-(--muted)">
+        Small figure: change vs. a year earlier. Marker: vs. industry (● favorable, ○ unfavorable, ◐ on par). Green favorable, red unfavorable.
+      </p>
       <div className="min-h-0 overflow-y-auto">
         <table className="w-full text-left">
           <tbody>
@@ -41,12 +53,12 @@ export function RatioBook({ rows, prior, industry }: { rows: { m: Metric }[]; pr
               return (
                 <tr key={m.id} className="border-b border-(--line)">
                   <td className="px-3 py-1.5">
-                    <span className="text-xs">{m.label}</span>
-                    {dot ? <span className={cn('ml-1.5 text-[10px]', dot)} title={`${ind!.read} vs. industry`}>●</span> : null}
+                    <span className={cn('text-xs', GLOSSARY[m.id] && 'cursor-help underline decoration-(--line) decoration-dotted underline-offset-2')} title={tip(m)}>{m.label}</span>
+                    {dot ? <span className={cn('ml-1.5 text-[10px]', dot)} title={`${ind!.read} vs. industry`}>{ind!.read === 'Favorable' ? '●' : ind!.read === 'Unfavorable' ? '○' : '◐'}<span className="sr-only"> {ind!.read} vs. industry</span></span> : null}
                   </td>
                   <td className="px-3 py-1.5 text-right">
                     <span className={cn('num block text-xs', scoreTone(s))}>{formatMetric(m)}</span>
-                    {d ? <span className={cn('num block text-[10px]', deltaTone(m.id, d.diff))} title="Change vs. one year earlier">{d.text}</span> : null}
+                    {d ? <span className={cn('num block text-[10px]', deltaTone(m.id, d.diff))} title="Change vs. one year earlier">{d.diff > 0 ? '▲' : '▼'} {d.text.replace(/^[+-]/, '')}</span> : null}
                   </td>
                 </tr>
               )

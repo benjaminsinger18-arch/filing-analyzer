@@ -12,7 +12,7 @@ export function RatioTable({ metrics }: { metrics: { moduleTitle: string; m: Met
       <table className="w-full min-w-150 text-left">
         <thead>
           <tr className="border-b border-(--line) text-[11px] text-(--muted)">
-            <th className="px-3 py-1.5 font-medium">Module</th>
+            <th scope="col" className="px-3 py-1.5 font-medium">Module</th>
             <th className="px-3 py-1.5 font-medium">Metric</th>
             <th className="px-3 py-1.5 text-right font-medium">Value</th>
             <th className="px-3 py-1.5 text-right font-medium">Score</th>
@@ -24,10 +24,16 @@ export function RatioTable({ metrics }: { metrics: { moduleTitle: string; m: Met
             const s = scoreMetric(m.id, m.value)
             return (
               <Fragment key={m.id}>
-                <tr onClick={() => setOpen(open === m.id ? null : m.id)} className="cursor-pointer border-b border-(--line) hover:bg-(--panel-2)">
+                <tr
+                  onClick={() => setOpen(open === m.id ? null : m.id)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setOpen(open === m.id ? null : m.id) } }}
+                  tabIndex={0}
+                  aria-expanded={open === m.id}
+                  className="cursor-pointer border-b border-(--line) hover:bg-(--panel-2)"
+                >
                   <td className="px-3 py-1.5 text-(--muted)">{moduleTitle}</td>
                   <td className="px-3 py-1.5 font-medium">{m.label}</td>
-                  <td className={cn('num px-3 py-1.5 text-right', m.value === null && 'text-(--muted)')}>{formatMetric(m)}</td>
+                  <td className={cn('num px-3 py-1.5 text-right', m.value === null && 'text-(--muted)')}>{formatMetric(m)}{m.annualized ? <span className="ml-1 text-[10px] text-(--muted)" title="Scaled up from one quarter; seasonal businesses can swing">ann.</span> : null}</td>
                   <td className={cn('num px-3 py-1.5 text-right', scoreTone(s))}>{s === null ? '' : Math.round(s)}</td>
                   <td className="px-3 py-1.5 text-xs text-(--muted)"><Formula formula={m.formula} id={m.id} />{m.source === 'provider' ? <span className="ml-2 rounded bg-(--panel-2) px-1.5 py-px text-[10px] text-(--accent)">Finnhub, TTM</span> : null}</td>
                 </tr>

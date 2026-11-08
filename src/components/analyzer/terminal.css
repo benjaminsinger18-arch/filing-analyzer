@@ -62,6 +62,15 @@
   border-radius: 4px;
   outline: none;
 }
+.terminal button:focus-visible,
+.terminal summary:focus-visible,
+.terminal a:focus-visible,
+.terminal tr:focus-visible,
+.terminal input[type='checkbox']:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 .terminal input:focus,
 .terminal select:focus {
   border-color: var(--accent);

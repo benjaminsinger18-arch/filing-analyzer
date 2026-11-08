@@ -15,6 +15,8 @@ export type Metric = {
   /** Why value is null, or a short caveat. */
   reason?: string
   hint?: string
+  /** True when a 10-Q figure was scaled up from one quarter, so seasonal businesses can swing. */
+  annualized?: boolean
   /** 'provider' when the value was filled from a data provider because the filing could not produce it. */
   source?: 'provider'
   /** Present on industry-comparison rows. */
@@ -66,6 +68,8 @@ export type RatingResult = {
   categories: RatingCategory[]
   used: number
   total: number
+  /** How many of the metrics feeding the score came from the data provider instead of the filing. */
+  providerInputs: number
 }
 
 export type AnalysisModule = {
