@@ -76,14 +76,14 @@ Filings you've analyzed are remembered in your browser between visits.
 
 ## Good to know
 
-- Works with US filings from about 2019 onward. No PDFs or older filings.
-- A blank means the number isn't available. Missing values are hidden rather than shown as zero.
-- Some blanks are real. Apple doesn't report interest expense, and banks have no gross margin.
-- Banks and insurers are reported differently, so they get a Banking section instead of some standard ratios, and Altman Z-score is unreliable for them.
-- When a filing can't produce a ratio, the app uses Finnhub's trailing-twelve-month figure and labels it "Finnhub, TTM" in the appendix. A number computed from the filing is never replaced.
-- Industry figures are group averages, not medians, and use Damodaran's definitions.
-- The share price usually comes from a different date than the filing period.
-- A company that moved to a new registration number (ExxonMobil Holdings is one) may have no filings under the new one. Upload its predecessor's filing instead.
+- Works with US filings from about 2019 onward. No PDFs or older filings
+- A blank means the number isn't available. Missing values are hidden rather than shown as zero
+- There will be plenty of blanks because many public companies do not report certain values
+- Banks and insurers are reported differently, so they get a Banking section instead of some standard ratios, and Altman Z-score is unreliable for them
+- When a filing can't produce a ratio, the app uses Finnhub's trailing-twelve-month figure and labels it "Finnhub, TTM" in the appendix. A number computed from the filing is never replaced
+- Industry figures are group averages, not medians, and use Damodaran's definitions
+- The share price usually comes from a different date than the filing period
+- A company that moved to a new registration number (ExxonMobil Holdings is one) may have no filings under the new one. Upload its predecessor's filing instead
 
 ## Troubleshooting
 
