@@ -40,7 +40,7 @@ export function FundamentalsChart({ fin, tab }: { fin: Financials; tab: ChartTab
     }))
   if (!rows.length) return null
   return (
-    <div className="min-h-72 flex-1 px-2 pb-2">
+    <div className="h-96 shrink-0 px-2 pb-2">
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={rows} margin={{ top: 12, right: 12, bottom: 0, left: 4 }} barGap={3}>
           <CartesianGrid vertical={false} stroke="var(--line)" />
