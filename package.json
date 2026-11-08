@@ -2,6 +2,10 @@
   "name": "filing-analyzer",
   "version": "0.1.0",
   "private": true,
+  "description": "Analyze an SEC 10-K or 10-Q: ratios, quality scores, industry comparison and a transparent screening rating.",
+  "engines": {
+    "node": ">=20.9"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",

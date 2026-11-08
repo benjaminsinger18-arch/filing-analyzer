@@ -450,7 +450,7 @@ export function Analyzer() {
             <div className="grid grid-cols-1 gap-3 p-3 md:grid-cols-2">
               <div className="flex flex-col gap-2">
                 <p className="text-xs font-semibold">Search company or ticker</p>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <div className="relative">
                     <input
                       value={ticker}
@@ -603,7 +603,7 @@ export function Analyzer() {
                 </div>
               ) : null
             }
-            className="min-h-96 flex-1"
+            className="min-h-136 flex-1"
           >
             {fin ? (
               <>
