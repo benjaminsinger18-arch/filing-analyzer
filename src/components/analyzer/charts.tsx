@@ -47,6 +47,8 @@ export function FundamentalsChart({ fin, tab }: { fin: Financials; tab: ChartTab
           <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'var(--muted)' }} tickLine={false} axisLine={false} />
           <YAxis tick={{ fontSize: 11, fill: 'var(--muted)' }} tickLine={false} axisLine={false} tickFormatter={(v) => compactUsd(v).replace('.00', '')} width={64} />
           <Tooltip
+            position={{ x: 72, y: 4 }}
+            isAnimationActive={false}
             cursor={{ fill: 'var(--panel-2)' }}
             content={({ active, payload }) => {
               if (!active || !payload?.length) return null
