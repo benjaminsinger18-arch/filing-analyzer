@@ -19,6 +19,15 @@ import { Footer } from './footer'
 
 import { EXAMPLES, keyOf, useAnalyzer } from './use-analyzer'
 
+/** Scrolls only the app's own scroller, so the top bar never moves out of view. */
+function jumpTo(e: React.MouseEvent, id: string) {
+  e.preventDefault()
+  const sc = document.getElementById('scroller')
+  const el = document.getElementById(id)
+  if (!sc || !el) return
+  sc.scrollTo({ top: sc.scrollTop + el.getBoundingClientRect().top - sc.getBoundingClientRect().top, behavior: 'smooth' })
+}
+
 export function Analyzer() {
   const {
     active,
@@ -88,7 +97,7 @@ export function Analyzer() {
   } = useAnalyzer()
 
   return (
-    <div className={cn('terminal flex h-svh flex-col overflow-hidden', dark && 'dark')}>
+    <div className={cn('terminal flex h-svh flex-col overflow-clip', dark && 'dark')}>
       <nav className="flex h-11 shrink-0 items-center justify-between gap-4 border-b border-(--line) bg-(--panel) px-3">
         <div className="flex items-center gap-5">
           <div className="flex items-center gap-2">
@@ -102,7 +111,7 @@ export function Analyzer() {
           <span className="hidden text-xs text-(--muted) sm:inline">10-K / 10-Q analyzer</span>
         </div>
         <div className="flex items-center gap-2">
-          <a href="#appendix" className="rounded px-2 py-1 text-xs text-(--muted) hover:text-(--fg)">Appendix</a>
+          <a href="#appendix" onClick={(e) => jumpTo(e, 'appendix')} className="rounded px-2 py-1 text-xs text-(--muted) hover:text-(--fg)">Appendix</a>
           <details className="relative">
             <summary className="flex cursor-pointer list-none items-center gap-1.5 rounded px-2 py-1 text-xs text-(--muted) hover:text-(--fg)">
               <SlidersHorizontal className="size-3.5" /> Show / hide
@@ -133,11 +142,11 @@ export function Analyzer() {
         Rules-based screen of one filing. Not investment advice.
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto scroll-smooth">
+      <div id="scroller" className="min-h-0 flex-1 overflow-y-auto scroll-smooth">
       {fin ? (
         <nav aria-label="Sections" className="sticky top-0 z-20 flex shrink-0 gap-1 border-b border-(--line) bg-(--panel) px-2 py-1 text-xs lg:hidden">
           {[['Rating', '#rating'], ['Ratios', '#ratios'], ['Chart', '#chart'], ['Appendix', '#appendix']].map(([label, href]) => (
-            <a key={href} href={href} className="rounded px-2.5 py-1 text-(--muted) hover:text-(--fg)">{label}</a>
+            <a key={href} href={href} onClick={(e) => jumpTo(e, href.slice(1))} className="rounded px-2.5 py-1 text-(--muted) hover:text-(--fg)">{label}</a>
           ))}
         </nav>
       ) : null}
