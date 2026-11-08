@@ -47,8 +47,8 @@ export function FundamentalsChart({ fin, tab }: { fin: Financials; tab: ChartTab
           <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'var(--muted)' }} tickLine={false} axisLine={false} />
           <YAxis tick={{ fontSize: 11, fill: 'var(--muted)' }} tickLine={false} axisLine={false} tickFormatter={(v) => compactUsd(v).replace('.00', '')} width={64} />
           <Tooltip
-            position={{ x: 72, y: 4 }}
-            isAnimationActive={false}
+            position={{ x: 72, y: 4 }} isAnimationActive={false}
+           
             cursor={{ fill: 'var(--panel-2)' }}
             content={({ active, payload }) => {
               if (!active || !payload?.length) return null
@@ -64,8 +64,8 @@ export function FundamentalsChart({ fin, tab }: { fin: Financials; tab: ChartTab
               )
             }}
           />
-          <Bar dataKey="prior" fill="var(--line)" radius={[3, 3, 0, 0]} maxBarSize={36} isAnimationActive={false} />
-          <Bar dataKey="cur" radius={[3, 3, 0, 0]} maxBarSize={36} isAnimationActive={false}>
+          <Bar dataKey="prior" fill="var(--line)" radius={[3, 3, 0, 0]} maxBarSize={36} />
+          <Bar dataKey="cur" radius={[3, 3, 0, 0]} maxBarSize={36}>
             {rows.map((r) => (
               <Cell key={r.name} fill={changeColor(r.item, r.cur, r.prior)} />
             ))}
