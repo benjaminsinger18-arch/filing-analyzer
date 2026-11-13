@@ -35,13 +35,13 @@ export const RATIO_MODULES: AnalysisModule[] = [
 export const SUMMARY_MODULES: AnalysisModule[] = [rating, notes]
 export const ALL_MODULES = [...RATIO_MODULES, ...SUMMARY_MODULES]
 
+/** Metrics that scale one quarter (or its YTD) to a full year on a 10-Q. */
+const ANNUALIZED_IDS = new Set(['roa', 'roe', 'asset-turnover', 'pe', 'ev-sales', 'nim', 'altman'])
+
 /**
  * Runs every module. Industry, market, rating and observations read the other modules' results, so
  * nothing is skipped; the UI's module toggles only control which ratio sections are displayed.
  */
-/** Metrics that scale one quarter (or its YTD) to a full year on a 10-Q. */
-const ANNUALIZED_IDS = new Set(['roa', 'roe', 'asset-turnover', 'pe', 'ev-sales', 'nim', 'altman'])
-
 export function runModules(fin: Financials): Record<string, ModuleResult> {
   const results: Record<string, ModuleResult> = {}
   for (const mod of RATIO_MODULES) {

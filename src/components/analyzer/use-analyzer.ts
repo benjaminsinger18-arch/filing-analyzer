@@ -262,7 +262,7 @@ export function useAnalyzer() {
     void searchTicker(c.ticker)
   }
 
-  /** Enter / FIND: take the highlighted or top suggestion unless the text is already an exact ticker. */
+  /** Enter: take the highlighted or top suggestion unless the text is already an exact ticker. */
   function submit() {
     const s = suggest[active] ?? suggest[0]
     if (s && suggestOpen && (active >= 0 || ticker.trim().toUpperCase() !== s.ticker)) return pick(s)
@@ -305,7 +305,7 @@ export function useAnalyzer() {
     setLoading(true)
     setFilings(null)
     try {
-      const res = await fetch(`/api/edgar?ticker=${sym}&form=10-K`)
+      const res = await fetch(`/api/edgar?ticker=${encodeURIComponent(sym)}&form=10-K`)
       const body = await res.json()
       if (!res.ok) throw new Error(body.error ?? 'Lookup failed.')
       const list = [...(body.filings as FilingRef[])].sort((a, b) => b.reportDate.localeCompare(a.reportDate))
@@ -366,7 +366,6 @@ export function useAnalyzer() {
     ? RATIO_MODULES.filter((m) => results[m.id] && enabled.has(m.id) && m.id !== 'industry' && m.id !== 'market').flatMap((m) => results[m.id].metrics.map((metric) => ({ moduleTitle: m.title, m: metric })))
     : []
   const book = allMetrics.filter(({ m }) => m.value !== null)
-  const ratioRows = book
   const ratingOf = (f: Financials) => {
     const r = histResults.get(f)?.rating?.rating
     return r?.composite == null ? null : Math.round(r.composite)
@@ -414,7 +413,7 @@ export function useAnalyzer() {
     rating,
     ratingOf,
     ratingSummary,
-    ratioRows,
+    ratioRows: book,
     results,
     retry,
     series,
